@@ -29,6 +29,23 @@ export function formatContext(len: number | undefined): string {
   return String(len)
 }
 
+/** Short "time ago" label, e.g. "just now", "4m ago", "2h ago", "Mar 3". */
+export function formatRelativeTime(ts: number): string {
+  const diff = Date.now() - ts
+  const sec = Math.round(diff / 1000)
+  if (sec < 45) return "just now"
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min}m ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const day = Math.round(hr / 24)
+  if (day < 7) return `${day}d ago`
+  return new Date(ts).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })
+}
+
 /** Per-million-token price label from OpenRouter per-token pricing string. */
 export function pricePerMillion(perToken: string | undefined): string {
   const v = Number(perToken)

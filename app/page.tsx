@@ -3,7 +3,13 @@
 import * as React from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
-import { RefreshCwIcon, LayersIcon, ZapIcon } from "lucide-react"
+import {
+  RefreshCwIcon,
+  LayersIcon,
+  ZapIcon,
+  PencilIcon,
+  ChevronDownIcon,
+} from "lucide-react"
 
 import { Header } from "@/components/router-dash/header"
 import { ModelPicker, MAX_MODELS } from "@/components/router-dash/model-picker"
@@ -13,7 +19,13 @@ import { ApiKeyDialog } from "@/components/router-dash/api-key-dialog"
 import { SummaryBar } from "@/components/router-dash/summary-bar"
 import { GridView } from "@/components/router-dash/grid-view"
 import { DiffView } from "@/components/router-dash/diff-view"
+import {
+  HistorySidebar,
+  HistorySheet,
+} from "@/components/router-dash/history-sidebar"
+import { ProviderBadge } from "@/components/router-dash/provider-badge"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 
 import { useTheme } from "@/hooks/use-theme"
 import { useLocalStorage } from "@/hooks/use-local-storage"
@@ -21,10 +33,11 @@ import {
   fetchModels,
   runCompletion,
   estimateCost,
+  providerOf,
   type ORModel,
   type RunParams,
 } from "@/lib/openrouter"
-import type { RunState, ViewMode } from "@/lib/types"
+import { HISTORY_LIMIT, type HistoryEntry, type RunState, type ViewMode } from "@/lib/types"
 import type { PromptPreset } from "@/lib/presets"
 
 const DEFAULT_PARAMS: RunParams = {
@@ -52,9 +65,20 @@ export default function Page() {
   )
   const [view, setView] = React.useState<ViewMode>("grid")
 
+  const [history, setHistory] = useLocalStorage<HistoryEntry[]>(
+    "routerdash:history",
+    [],
+  )
+  const [activeHistoryId, setActiveHistoryId] = React.useState<string | null>(
+    null,
+  )
+
   const [results, setResults] = React.useState<Map<string, RunState>>(new Map())
   const [running, setRunning] = React.useState(false)
   const [elapsedMs, setElapsedMs] = React.useState(0)
+
+  // Model panel collapses while a run is active or results are shown.
+  const [panelCollapsed, setPanelCollapsed] = React.useState(false)
 
   const abortRef = React.useRef<AbortController | null>(null)
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
@@ -93,6 +117,16 @@ export default function Page() {
     if (!canDiff && view === "diff") setView("grid")
   }, [canDiff, view])
 
+  // Auto-collapse the model panel on the rising edge of running/results,
+  // and re-open it once everything is cleared. The user can still toggle freely.
+  const active = running || hasResults
+  const prevActive = React.useRef(false)
+  React.useEffect(() => {
+    if (active && !prevActive.current) setPanelCollapsed(true)
+    if (!active) setPanelCollapsed(false)
+    prevActive.current = active
+  }, [active])
+
   const stopTimer = React.useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current)
@@ -117,6 +151,9 @@ export default function Page() {
     const controller = new AbortController()
     abortRef.current = controller
     setRunning(true)
+    setActiveHistoryId(null)
+
+    const runModelIds = [...selectedIds]
 
     // Seed all slots as running.
     const seeded = new Map<string, RunState>()
@@ -139,8 +176,8 @@ export default function Page() {
       setElapsedMs(performance.now() - start)
     }, 100)
 
-    await Promise.all(
-      selectedIds.map(async (id) => {
+    const finalStates = await Promise.all(
+      runModelIds.map(async (id): Promise<RunState> => {
         const model = modelById.get(id)
         const t0 = performance.now()
         try {
@@ -153,49 +190,65 @@ export default function Page() {
             controller.signal,
           )
           const latencyMs = performance.now() - t0
-          setResults((prev) => {
-            const next = new Map(prev)
-            next.set(id, {
-              modelId: id,
-              status: "done",
-              content,
-              usage,
-              cost: model ? estimateCost(model, usage) : 0,
-              latencyMs,
-            })
-            return next
-          })
+          const state: RunState = {
+            modelId: id,
+            status: "done",
+            content,
+            usage,
+            cost: model ? estimateCost(model, usage) : 0,
+            latencyMs,
+          }
+          setResults((prev) => new Map(prev).set(id, state))
+          return state
         } catch (err) {
           const latencyMs = performance.now() - t0
           const aborted =
             controller.signal.aborted ||
             (err instanceof DOMException && err.name === "AbortError")
-          setResults((prev) => {
-            const next = new Map(prev)
-            next.set(id, {
-              modelId: id,
-              status: "error",
-              content: "",
-              error: aborted
-                ? "Cancelled"
-                : err instanceof Error
-                  ? err.message
-                  : "Request failed",
-              usage: null,
-              cost: 0,
-              latencyMs,
-            })
-            return next
-          })
+          const state: RunState = {
+            modelId: id,
+            status: "error",
+            content: "",
+            error: aborted
+              ? "Cancelled"
+              : err instanceof Error
+                ? err.message
+                : "Request failed",
+            usage: null,
+            cost: 0,
+            latencyMs,
+          }
+          setResults((prev) => new Map(prev).set(id, state))
+          return state
         }
       }),
     )
 
     stopTimer()
-    setElapsedMs(performance.now() - start)
+    const totalElapsed = performance.now() - start
+    setElapsedMs(totalElapsed)
     setRunning(false)
     abortRef.current = null
-  }, [apiKey, selectedIds, prompt, params, modelById, stopTimer])
+
+    // Persist to history unless the whole run was cancelled before any output.
+    const produced = finalStates.some(
+      (s) => s.status === "done" || (s.status === "error" && s.error !== "Cancelled"),
+    )
+    if (produced) {
+      const entry: HistoryEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: Date.now(),
+        prompt,
+        params,
+        modelIds: runModelIds,
+        results: finalStates,
+        elapsedMs: totalElapsed,
+        totalCost: finalStates.reduce((sum, s) => sum + s.cost, 0),
+      }
+      setHistory((prev) => [entry, ...prev].slice(0, HISTORY_LIMIT))
+      setActiveHistoryId(entry.id)
+    }
+  }, [apiKey, selectedIds, prompt, params, modelById, stopTimer, setHistory])
 
   const handleCancel = React.useCallback(() => {
     abortRef.current?.abort()
@@ -210,6 +263,37 @@ export default function Page() {
     setParams((p) => ({ ...p, systemPrompt: preset.system }))
     toast.success(`Loaded "${preset.label}" template`)
   }
+
+  const loadHistory = React.useCallback(
+    (entry: HistoryEntry) => {
+      if (running) handleCancel()
+      setSelectedIds(entry.modelIds)
+      setPrompt(entry.prompt)
+      setParams(entry.params)
+      setResults(new Map(entry.results.map((r) => [r.modelId, r])))
+      setElapsedMs(entry.elapsedMs)
+      setActiveHistoryId(entry.id)
+      setPanelCollapsed(true)
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      }
+    },
+    [running, handleCancel, setSelectedIds, setPrompt, setParams],
+  )
+
+  const deleteHistory = React.useCallback(
+    (id: string) => {
+      setHistory((prev) => prev.filter((e) => e.id !== id))
+      setActiveHistoryId((cur) => (cur === id ? null : cur))
+    },
+    [setHistory],
+  )
+
+  const clearHistory = React.useCallback(() => {
+    setHistory([])
+    setActiveHistoryId(null)
+    toast.success("History cleared")
+  }, [setHistory])
 
   return (
     <div className="min-h-svh bg-background">
@@ -228,86 +312,185 @@ export default function Page() {
         }
       />
 
-      <main className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-5">
-        {/* Config surface */}
-        <section className="grid-dots rounded-2xl border border-border bg-card/50 p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <LayersIcon className="size-4 text-primary" />
-              <h1 className="text-sm font-semibold">
-                Compare up to {MAX_MODELS} models, side by side
-              </h1>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <ParamsSheet
-                params={params}
-                onChange={setParams}
-                selectedModels={selectedModels}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8"
-                onClick={() => mutate()}
-                disabled={isLoading}
-                aria-label="Refresh model catalog"
-              >
-                <RefreshCwIcon
-                  className={isLoading ? "size-4 animate-spin" : "size-4"}
-                />
-              </Button>
-            </div>
-          </div>
-
-          {modelsError ? (
-            <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              Failed to load the OpenRouter model catalog. Check your connection
-              and retry.
-            </div>
-          ) : null}
-
-          <ModelPicker
-            models={models}
-            selectedIds={selectedIds}
-            onChange={setSelectedIds}
-            loading={isLoading}
-          />
-        </section>
-
-        <PromptPanel
-          prompt={prompt}
-          onPromptChange={setPrompt}
-          onApplyPreset={applyPreset}
-          onRun={handleRun}
-          onCancel={handleCancel}
-          running={running}
-          canRun={selectedIds.length > 0 && Boolean(apiKey.trim())}
+      <main className="mx-auto flex max-w-[1600px] gap-4 px-4 py-5">
+        <HistorySidebar
+          entries={history}
+          activeId={activeHistoryId}
+          onSelect={loadHistory}
+          onDelete={deleteHistory}
+          onClear={clearHistory}
         />
 
-        {hasResults ? (
-          <>
-            <SummaryBar results={resultList} elapsedMs={elapsedMs} />
-            {view === "grid" || !canDiff ? (
-              <GridView
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          {/* Config surface */}
+          <section className="grid-dots rounded-2xl border border-border bg-card/50 p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <LayersIcon className="size-4 text-primary" />
+                <h1 className="text-sm font-semibold">
+                  {panelCollapsed
+                    ? `${selectedIds.length} model${selectedIds.length === 1 ? "" : "s"} selected`
+                    : `Compare up to ${MAX_MODELS} models, side by side`}
+                </h1>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <HistorySheet
+                  entries={history}
+                  activeId={activeHistoryId}
+                  onSelect={loadHistory}
+                  onDelete={deleteHistory}
+                  onClear={clearHistory}
+                />
+                {panelCollapsed ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => setPanelCollapsed(false)}
+                  >
+                    <PencilIcon data-icon="inline-start" />
+                    Edit models
+                  </Button>
+                ) : (
+                  <>
+                    {(running || hasResults) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-muted-foreground"
+                        onClick={() => setPanelCollapsed(true)}
+                      >
+                        <ChevronDownIcon data-icon="inline-start" />
+                        Collapse
+                      </Button>
+                    )}
+                    <ParamsSheet
+                      params={params}
+                      onChange={setParams}
+                      selectedModels={selectedModels}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      onClick={() => mutate()}
+                      disabled={isLoading}
+                      aria-label="Refresh model catalog"
+                    >
+                      <RefreshCwIcon
+                        className={isLoading ? "size-4 animate-spin" : "size-4"}
+                      />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {panelCollapsed ? (
+              <CollapsedModels
                 selectedIds={selectedIds}
                 modelById={modelById}
-                results={results}
+                onExpand={() => setPanelCollapsed(false)}
               />
             ) : (
-              <DiffView
-                selectedIds={selectedIds}
-                modelById={modelById}
-                results={results}
-              />
+              <>
+                {modelsError ? (
+                  <div className="mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    Failed to load the OpenRouter model catalog. Check your
+                    connection and retry.
+                  </div>
+                ) : null}
+
+                <ModelPicker
+                  models={models}
+                  selectedIds={selectedIds}
+                  onChange={setSelectedIds}
+                  loading={isLoading}
+                />
+              </>
             )}
-          </>
-        ) : (
-          <EmptyState
-            hasSelection={selectedIds.length > 0}
-            hasKey={Boolean(apiKey.trim())}
+          </section>
+
+          <PromptPanel
+            prompt={prompt}
+            onPromptChange={setPrompt}
+            onApplyPreset={applyPreset}
+            onRun={handleRun}
+            onCancel={handleCancel}
+            running={running}
+            canRun={selectedIds.length > 0 && Boolean(apiKey.trim())}
           />
-        )}
+
+          {hasResults ? (
+            <>
+              <SummaryBar results={resultList} elapsedMs={elapsedMs} />
+              {view === "grid" || !canDiff ? (
+                <GridView
+                  selectedIds={selectedIds}
+                  modelById={modelById}
+                  results={results}
+                />
+              ) : (
+                <DiffView
+                  selectedIds={selectedIds}
+                  modelById={modelById}
+                  results={results}
+                />
+              )}
+            </>
+          ) : (
+            <EmptyState
+              hasSelection={selectedIds.length > 0}
+              hasKey={Boolean(apiKey.trim())}
+            />
+          )}
+        </div>
       </main>
+    </div>
+  )
+}
+
+function CollapsedModels({
+  selectedIds,
+  modelById,
+  onExpand,
+}: {
+  selectedIds: string[]
+  modelById: Map<string, ORModel>
+  onExpand: () => void
+}) {
+  if (selectedIds.length === 0) {
+    return (
+      <button
+        type="button"
+        onClick={onExpand}
+        className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+      >
+        No models selected — click to choose
+      </button>
+    )
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {selectedIds.map((id, idx) => {
+        const m = modelById.get(id)
+        const slug = m ? providerOf(m) : id.split("/")[0]
+        return (
+          <Badge
+            key={id}
+            variant="outline"
+            className="h-7 gap-1.5 border-border bg-surface pr-2 pl-1.5"
+          >
+            <span className="grid size-4 place-items-center rounded bg-primary/15 font-mono text-[9px] font-semibold text-primary">
+              {String.fromCharCode(65 + idx)}
+            </span>
+            <ProviderBadge slug={slug} className="size-4" />
+            <span className="max-w-40 truncate font-medium">
+              {m?.name ?? id}
+            </span>
+          </Badge>
+        )
+      })}
     </div>
   )
 }
@@ -329,7 +512,7 @@ function EmptyState({
         {!hasKey
           ? "Add your OpenRouter API key, pick a few models, and run one prompt across all of them."
           : !hasSelection
-            ? "Select up to four models above, then hit Run to compare their responses, latency, and cost."
+            ? `Select up to ${MAX_MODELS} models above, then hit Run to compare their responses, latency, and cost.`
             : "Hit Run Benchmarks to fan your prompt out across the selected models."}
       </p>
     </div>

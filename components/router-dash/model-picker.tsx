@@ -40,7 +40,7 @@ import {
 } from "@/lib/openrouter"
 import { formatContext, pricePerMillion } from "@/lib/format"
 
-export const MAX_MODELS = 4
+export const MAX_MODELS = 6
 
 type FilterKey = "free" | "flagship" | "vision" | "context"
 
