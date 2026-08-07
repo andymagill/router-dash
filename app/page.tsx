@@ -253,7 +253,7 @@ export default function Page() {
   const applyPreset = (preset: PromptPreset) => {
     setPrompt(preset.prompt)
     setParams((p) => ({ ...p, systemPrompt: preset.system }))
-    toast.success(`Loaded "${preset.label}" template`)
+    toast.success(`Loaded "${preset.label}" preset`)
   }
 
   const loadHistory = React.useCallback(
@@ -347,11 +347,6 @@ export default function Page() {
                         Collapse
                       </Button>
                     )}
-                    <ParamsSheet
-                      params={params}
-                      onChange={setParams}
-                      selectedModels={selectedModels}
-                    />
                     <Button
                       variant="ghost"
                       size="icon"
@@ -402,6 +397,13 @@ export default function Page() {
             onCancel={handleCancel}
             running={running}
             canRun={selectedIds.length > 0 && Boolean(apiKey.trim())}
+            paramsSlot={
+              <ParamsSheet
+                params={params}
+                onChange={setParams}
+                selectedModels={selectedModels}
+              />
+            }
           />
 
           {hasResults ? (

@@ -31,6 +31,7 @@ export function PromptPanel({
   onCancel,
   running,
   canRun,
+  paramsSlot,
 }: {
   prompt: string
   onPromptChange: (value: string) => void
@@ -39,6 +40,7 @@ export function PromptPanel({
   onCancel: () => void
   running: boolean
   canRun: boolean
+  paramsSlot?: React.ReactNode
 }) {
   const lineCount = prompt ? prompt.split("\n").length : 0
   const tokens = estimateTokens(prompt)
@@ -62,33 +64,36 @@ export function PromptPanel({
           <FileTextIcon className="size-4 text-muted-foreground" />
           <h2 className="text-sm font-medium">Prompt</h2>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline" size="sm" className="gap-1.5">
-                Templates
-                <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-60">
-            <DropdownMenuLabel>Preset templates</DropdownMenuLabel>
-            <DropdownMenuGroup>
-              {PROMPT_PRESETS.map((preset) => (
-                <DropdownMenuItem
-                  key={preset.id}
-                  onClick={() => onApplyPreset(preset)}
-                  className="flex-col items-start gap-0.5"
-                >
-                  <span className="font-medium">{preset.label}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {preset.description}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1.5">
+          {paramsSlot}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Presets
+                  <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Prompt presets</DropdownMenuLabel>
+                {PROMPT_PRESETS.map((preset) => (
+                  <DropdownMenuItem
+                    key={preset.id}
+                    onClick={() => onApplyPreset(preset)}
+                    className="flex-col items-start gap-0.5"
+                  >
+                    <span className="font-medium">{preset.label}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {preset.description}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <div className="relative">

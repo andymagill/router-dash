@@ -39,6 +39,7 @@ import {
   isVisionModel,
 } from "@/lib/openrouter"
 import { formatContext, pricePerMillion } from "@/lib/format"
+import { useLocalStorage } from "@/hooks/use-local-storage"
 
 export const MAX_MODELS = 6
 
@@ -64,7 +65,10 @@ export function ModelPicker({
 }) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
-  const [filters, setFilters] = React.useState<string[]>([])
+  const [filters, setFilters] = useLocalStorage<string[]>(
+    "routerdash:filters",
+    [],
+  )
 
   const modelById = React.useMemo(() => {
     const map = new Map<string, ORModel>()
