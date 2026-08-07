@@ -2,31 +2,20 @@
 
 import * as React from "react"
 import { Button } from "@/components/ui/button"
-import {
-  SunIcon,
-  MoonIcon,
-  GitCompareIcon,
-  LayoutGridIcon,
-} from "lucide-react"
-import { cn } from "@/lib/utils"
-import type { ViewMode } from "@/lib/types"
+import { SunIcon, MoonIcon } from "lucide-react"
 
 interface HeaderProps {
   theme: "light" | "dark"
   onToggleTheme: () => void
-  view: ViewMode
-  onViewChange: (v: ViewMode) => void
-  canDiff: boolean
   keySlot: React.ReactNode
+  historySlot: React.ReactNode
 }
 
 export function Header({
   theme,
   onToggleTheme,
-  view,
-  onViewChange,
-  canDiff,
   keySlot,
+  historySlot,
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
@@ -46,21 +35,7 @@ export function Header({
         </div>
 
         <div className="ml-auto flex items-center gap-1.5">
-          <div className="mr-1 flex items-center rounded-lg border border-border bg-surface p-0.5">
-            <ViewToggle
-              active={view === "grid"}
-              onClick={() => onViewChange("grid")}
-              icon={<LayoutGridIcon className="size-3.5" />}
-              label="Grid"
-            />
-            <ViewToggle
-              active={view === "diff"}
-              onClick={() => onViewChange("diff")}
-              icon={<GitCompareIcon className="size-3.5" />}
-              label="Diff"
-              disabled={!canDiff}
-            />
-          </div>
+          {historySlot}
 
           {keySlot}
 
@@ -80,37 +55,5 @@ export function Header({
         </div>
       </div>
     </header>
-  )
-}
-
-function ViewToggle({
-  active,
-  onClick,
-  icon,
-  label,
-  disabled,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-  disabled?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex items-center gap-1.5 rounded-md px-2.5 py-1 font-mono text-xs transition-colors",
-        active
-          ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:text-foreground",
-        disabled && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
-      )}
-    >
-      {icon}
-      {label}
-    </button>
   )
 }

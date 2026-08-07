@@ -1,4 +1,4 @@
-import type { ORUsage } from "@/lib/openrouter"
+import type { ORUsage, RunParams } from "@/lib/openrouter"
 
 export type RunStatus = "idle" | "running" | "done" | "error"
 
@@ -13,3 +13,16 @@ export interface RunState {
 }
 
 export type ViewMode = "grid" | "diff"
+
+export interface HistoryEntry {
+  id: string
+  createdAt: number
+  prompt: string
+  params: RunParams
+  modelIds: string[]
+  results: RunState[]
+  elapsedMs: number
+  totalCost: number
+}
+
+export const HISTORY_LIMIT = 25
