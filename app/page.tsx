@@ -336,17 +336,15 @@ export default function Page() {
                   </Button>
                 ) : (
                   <>
-                    {(running || hasResults) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1.5 text-muted-foreground"
-                        onClick={() => setPanelCollapsed(true)}
-                      >
-                        <ChevronDownIcon data-icon="inline-start" />
-                        Collapse
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-muted-foreground"
+                      onClick={() => setPanelCollapsed(true)}
+                    >
+                      <ChevronDownIcon data-icon="inline-start" />
+                      Collapse
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -423,6 +421,17 @@ export default function Page() {
           )}
         </div>
       </main>
+
+      <footer className="mt-4 border-t border-border/50 py-4 text-center">
+        <a
+          href="https://magill.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Built by Andrew Magill
+        </a>
+      </footer>
     </div>
   )
 }
