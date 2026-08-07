@@ -18,7 +18,6 @@ import { ParamsSheet } from "@/components/router-dash/params-sheet"
 import { ApiKeyDialog } from "@/components/router-dash/api-key-dialog"
 import { SummaryBar } from "@/components/router-dash/summary-bar"
 import { GridView } from "@/components/router-dash/grid-view"
-import { DiffView } from "@/components/router-dash/diff-view"
 import {
   HistorySidebar,
   HistorySheet,
@@ -37,7 +36,7 @@ import {
   type ORModel,
   type RunParams,
 } from "@/lib/openrouter"
-import { HISTORY_LIMIT, type HistoryEntry, type RunState, type ViewMode } from "@/lib/types"
+import { HISTORY_LIMIT, type HistoryEntry, type RunState } from "@/lib/types"
 import type { PromptPreset } from "@/lib/presets"
 
 const DEFAULT_PARAMS: RunParams = {
@@ -63,8 +62,6 @@ export default function Page() {
     "routerdash:params",
     DEFAULT_PARAMS,
   )
-  const [view, setView] = React.useState<ViewMode>("grid")
-
   const [history, setHistory] = useLocalStorage<HistoryEntry[]>(
     "routerdash:history",
     [],
@@ -107,15 +104,10 @@ export default function Page() {
     [selectedIds, modelById],
   )
 
-  const canDiff = selectedIds.length >= 2
   const hasResults = results.size > 0
   const resultList = selectedIds
     .map((id) => results.get(id))
     .filter(Boolean) as RunState[]
-
-  React.useEffect(() => {
-    if (!canDiff && view === "diff") setView("grid")
-  }, [canDiff, view])
 
   // Auto-collapse the model panel on the rising edge of running/results,
   // and re-open it once everything is cleared. The user can still toggle freely.
@@ -300,9 +292,15 @@ export default function Page() {
       <Header
         theme={theme}
         onToggleTheme={toggle}
-        view={view}
-        onViewChange={setView}
-        canDiff={canDiff}
+        historySlot={
+          <HistorySheet
+            entries={history}
+            activeId={activeHistoryId}
+            onSelect={loadHistory}
+            onDelete={deleteHistory}
+            onClear={clearHistory}
+          />
+        }
         keySlot={
           <ApiKeyDialog
             apiKey={apiKey}
@@ -312,16 +310,8 @@ export default function Page() {
         }
       />
 
-      <main className="mx-auto flex max-w-[1600px] gap-4 px-4 py-5">
-        <HistorySidebar
-          entries={history}
-          activeId={activeHistoryId}
-          onSelect={loadHistory}
-          onDelete={deleteHistory}
-          onClear={clearHistory}
-        />
-
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
+      <main className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-5">
+        <div className="flex flex-col gap-4">
           {/* Config surface */}
           <section className="grid-dots rounded-2xl border border-border bg-card/50 p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -334,13 +324,6 @@ export default function Page() {
                 </h1>
               </div>
               <div className="flex items-center gap-1.5">
-                <HistorySheet
-                  entries={history}
-                  activeId={activeHistoryId}
-                  onSelect={loadHistory}
-                  onDelete={deleteHistory}
-                  onClear={clearHistory}
-                />
                 {panelCollapsed ? (
                   <Button
                     variant="outline"
@@ -424,19 +407,11 @@ export default function Page() {
           {hasResults ? (
             <>
               <SummaryBar results={resultList} elapsedMs={elapsedMs} />
-              {view === "grid" || !canDiff ? (
-                <GridView
-                  selectedIds={selectedIds}
-                  modelById={modelById}
-                  results={results}
-                />
-              ) : (
-                <DiffView
-                  selectedIds={selectedIds}
-                  modelById={modelById}
-                  results={results}
-                />
-              )}
+              <GridView
+                selectedIds={selectedIds}
+                modelById={modelById}
+                results={results}
+              />
             </>
           ) : (
             <EmptyState

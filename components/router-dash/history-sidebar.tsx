@@ -186,7 +186,7 @@ export function HistorySheet(props: React.ComponentProps<typeof HistoryPanel>) {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button variant="outline" size="sm" className="gap-1.5 lg:hidden">
+          <Button variant="outline" size="sm" className="gap-1.5">
             <HistoryIcon data-icon="inline-start" />
             History
             {props.entries.length > 0 && (
