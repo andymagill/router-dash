@@ -104,7 +104,6 @@ export function ModelPicker({
       <ToggleGroup
         value={filters}
         onValueChange={(v) => setFilters(v as string[])}
-        toggleMultiple
         spacing={2}
         className="flex-wrap"
       >
