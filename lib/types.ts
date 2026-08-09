@@ -23,6 +23,14 @@ export interface HistoryEntry {
   results: RunState[]
   elapsedMs: number
   totalCost: number
+  /** Pinned entries are kept at the top and are never evicted by the limit. */
+  pinned?: boolean
 }
 
 export const HISTORY_LIMIT = 25
+
+/** App version surfaced in exports and feedback diagnostics. */
+export const APP_VERSION = "1.0.0"
+
+/** GitHub repository used for feedback issue links. */
+export const GITHUB_REPO = "andymagill/router-dash"

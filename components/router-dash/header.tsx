@@ -9,6 +9,7 @@ interface HeaderProps {
   onToggleTheme: () => void
   keySlot: React.ReactNode
   historySlot: React.ReactNode
+  feedbackSlot?: React.ReactNode
 }
 
 export function Header({
@@ -16,6 +17,7 @@ export function Header({
   onToggleTheme,
   keySlot,
   historySlot,
+  feedbackSlot,
 }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-xl">
@@ -36,6 +38,8 @@ export function Header({
 
         <div className="ml-auto flex items-center gap-1.5">
           {historySlot}
+
+          {feedbackSlot}
 
           {keySlot}
 
