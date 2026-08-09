@@ -11,6 +11,8 @@ import {
   ChevronDownIcon,
 } from "lucide-react"
 
+import { MessageSquareIcon } from "lucide-react"
+
 import { Header } from "@/components/router-dash/header"
 import { ModelPicker, MAX_MODELS } from "@/components/router-dash/model-picker"
 import { PromptPanel } from "@/components/router-dash/prompt-panel"
@@ -18,10 +20,8 @@ import { ParamsSheet } from "@/components/router-dash/params-sheet"
 import { ApiKeyDialog } from "@/components/router-dash/api-key-dialog"
 import { SummaryBar } from "@/components/router-dash/summary-bar"
 import { GridView } from "@/components/router-dash/grid-view"
-import {
-  HistorySidebar,
-  HistorySheet,
-} from "@/components/router-dash/history-sidebar"
+import { ResultsToolbar } from "@/components/router-dash/results-toolbar"
+import { HistorySheet } from "@/components/router-dash/history-sidebar"
 import { ProviderBadge } from "@/components/router-dash/provider-badge"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -38,6 +38,21 @@ import {
 } from "@/lib/openrouter"
 import { HISTORY_LIMIT, type HistoryEntry, type RunState } from "@/lib/types"
 import type { PromptPreset } from "@/lib/presets"
+import {
+  SHARE_PARAM,
+  decodeShareToken,
+  buildShareUrl,
+  buildShareUrlFromEntry,
+  sharedResultToRunState,
+} from "@/lib/share"
+import {
+  serializeJsonExport,
+  buildCsvExport,
+  parseJsonImport,
+  downloadTextFile,
+} from "@/lib/export"
+import { trackEvent, categorizeError } from "@/lib/analytics"
+import { buildFeedbackUrl } from "@/lib/feedback"
 
 const DEFAULT_PARAMS: RunParams = {
   systemPrompt: "",
@@ -62,9 +77,16 @@ export default function Page() {
     "routerdash:params",
     DEFAULT_PARAMS,
   )
+  const [storageWarning, setStorageWarning] = React.useState(false)
   const [history, setHistory] = useLocalStorage<HistoryEntry[]>(
     "routerdash:history",
     [],
+    {
+      onError: () => {
+        setStorageWarning(true)
+        toast.error("Browser storage is full — export or clear some history.")
+      },
+    },
   )
   const [activeHistoryId, setActiveHistoryId] = React.useState<string | null>(
     null,
@@ -145,6 +167,11 @@ export default function Page() {
     setRunning(true)
     setActiveHistoryId(null)
 
+    trackEvent("benchmark_started", {
+      modelIds: selectedIds.join(","),
+      modelCount: selectedIds.length,
+    })
+
     const runModelIds = [...selectedIds]
 
     // Seed all slots as running.
@@ -222,10 +249,28 @@ export default function Page() {
     setRunning(false)
     abortRef.current = null
 
+    const doneCount = finalStates.filter((s) => s.status === "done").length
+    const failedCount = finalStates.filter(
+      (s) => s.status === "error" && s.error !== "Cancelled",
+    ).length
+
+    if (doneCount === 0 && failedCount > 0) {
+      const firstErr = finalStates.find(
+        (s) => s.status === "error" && s.error !== "Cancelled",
+      )
+      trackEvent("benchmark_failed", {
+        modelCount: runModelIds.length,
+        errorCategory: categorizeError(firstErr?.error),
+      })
+    } else if (doneCount > 0) {
+      trackEvent("benchmark_completed", {
+        modelCount: runModelIds.length,
+        durationMs: Math.round(totalElapsed),
+      })
+    }
+
     // Persist to history unless the whole run was cancelled before any output.
-    const produced = finalStates.some(
-      (s) => s.status === "done" || (s.status === "error" && s.error !== "Cancelled"),
-    )
+    const produced = doneCount > 0 || failedCount > 0
     if (produced) {
       const entry: HistoryEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -237,7 +282,14 @@ export default function Page() {
         elapsedMs: totalElapsed,
         totalCost: finalStates.reduce((sum, s) => sum + s.cost, 0),
       }
-      setHistory((prev) => [entry, ...prev].slice(0, HISTORY_LIMIT))
+      // Never evict pinned entries; trim only the oldest unpinned ones.
+      setHistory((prev) => {
+        const next = [entry, ...prev]
+        const pinned = next.filter((e) => e.pinned)
+        const unpinned = next.filter((e) => !e.pinned)
+        const keep = Math.max(0, HISTORY_LIMIT - pinned.length)
+        return [...pinned, ...unpinned.slice(0, keep)]
+      })
       setActiveHistoryId(entry.id)
     }
   }, [apiKey, selectedIds, prompt, params, modelById, stopTimer, setHistory])
@@ -287,6 +339,172 @@ export default function Page() {
     toast.success("History cleared")
   }, [setHistory])
 
+  const togglePin = React.useCallback(
+    (id: string) => {
+      setHistory((prev) =>
+        prev.map((e) => (e.id === id ? { ...e, pinned: !e.pinned } : e)),
+      )
+    },
+    [setHistory],
+  )
+
+  const copyShareUrl = React.useCallback(
+    async (url: string, truncated: boolean, source: string) => {
+      try {
+        await navigator.clipboard.writeText(url)
+        toast.success(
+          truncated
+            ? "Share link copied — responses were trimmed to fit the URL"
+            : "Share link copied to clipboard",
+        )
+        trackEvent("share_link_copied", { source, truncated })
+      } catch {
+        toast.error("Couldn't copy the link to your clipboard")
+      }
+    },
+    [],
+  )
+
+  const shareBaseUrl = () =>
+    typeof window === "undefined"
+      ? ""
+      : `${window.location.origin}${window.location.pathname}`
+
+  const shareCurrent = React.useCallback(() => {
+    const runs = selectedIds
+      .map((id) => results.get(id))
+      .filter(Boolean) as RunState[]
+    const { url, truncated } = buildShareUrl(
+      shareBaseUrl(),
+      prompt,
+      params,
+      selectedIds,
+      runs,
+    )
+    void copyShareUrl(url, truncated, "results")
+  }, [selectedIds, results, prompt, params, copyShareUrl])
+
+  const shareEntry = React.useCallback(
+    (entry: HistoryEntry) => {
+      const { url, truncated } = buildShareUrlFromEntry(shareBaseUrl(), entry)
+      void copyShareUrl(url, truncated, "history")
+    },
+    [copyShareUrl],
+  )
+
+  const exportJson = React.useCallback(() => {
+    if (history.length === 0) {
+      toast.error("No history to export yet")
+      return
+    }
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadTextFile(
+      `routerdash-history-${stamp}.json`,
+      serializeJsonExport(history),
+      "application/json",
+    )
+    trackEvent("result_exported", { exportFormat: "json" })
+    toast.success(`Exported ${history.length} run${history.length === 1 ? "" : "s"} as JSON`)
+  }, [history])
+
+  const exportCsv = React.useCallback(() => {
+    if (history.length === 0) {
+      toast.error("No history to export yet")
+      return
+    }
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadTextFile(
+      `routerdash-history-${stamp}.csv`,
+      buildCsvExport(history),
+      "text/csv;charset=utf-8",
+    )
+    trackEvent("result_exported", { exportFormat: "csv" })
+    toast.success("Exported history summary as CSV")
+  }, [history])
+
+  const importFile = React.useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text()
+        const result = parseJsonImport(text, history)
+        if (!result.ok) {
+          toast.error(result.reason)
+          return
+        }
+        if (result.imported === 0) {
+          toast.info(
+            result.duplicates > 0
+              ? "Those runs are already in your history"
+              : "No runs found to import",
+          )
+          return
+        }
+        setHistory((prev) => {
+          const merged = [...result.entries, ...prev]
+          const pinned = merged.filter((e) => e.pinned)
+          const unpinned = merged.filter((e) => !e.pinned)
+          const keep = Math.max(0, HISTORY_LIMIT - pinned.length)
+          return [...pinned, ...unpinned.slice(0, keep)]
+        })
+        toast.success(
+          `Imported ${result.imported} run${result.imported === 1 ? "" : "s"}` +
+            (result.duplicates
+              ? `, skipped ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"}`
+              : ""),
+        )
+      } catch {
+        toast.error("Couldn't read that file")
+      }
+    },
+    [history, setHistory],
+  )
+
+  const openFeedback = React.useCallback(() => {
+    const url = buildFeedbackUrl({
+      modelIds: selectedIds,
+      page: typeof window !== "undefined" ? window.location.pathname : "/",
+      userAgent:
+        typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+    })
+    trackEvent("feedback_opened")
+    window.open(url, "_blank", "noopener,noreferrer")
+  }, [selectedIds])
+
+  // On first load, hydrate the workbench from a share link if one is present.
+  const sharedApplied = React.useRef(false)
+  React.useEffect(() => {
+    if (sharedApplied.current || typeof window === "undefined") return
+    const search = new URLSearchParams(window.location.search)
+    const token = search.get(SHARE_PARAM)
+    if (!token) return
+    sharedApplied.current = true
+
+    const decoded = decodeShareToken(token)
+    if (!decoded.ok) {
+      toast.error(`Couldn't open shared link: ${decoded.reason}`)
+      window.history.replaceState(null, "", window.location.pathname)
+      return
+    }
+
+    const payload = decoded.payload
+    setSelectedIds(payload.modelIds)
+    setPrompt(payload.prompt)
+    setParams(payload.params)
+    const map = new Map<string, RunState>()
+    for (const r of payload.results) {
+      map.set(r.modelId, sharedResultToRunState(r))
+    }
+    setResults(map)
+
+    if (payload.truncated) {
+      toast.warning("Shared link omitted full responses to fit the URL")
+    } else {
+      toast.success("Loaded shared benchmark")
+    }
+    // Clean the URL so refresh/share doesn't re-trigger or duplicate state.
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [setSelectedIds, setPrompt, setParams])
+
   return (
     <div className="min-h-svh bg-background">
       <Header
@@ -296,10 +514,27 @@ export default function Page() {
           <HistorySheet
             entries={history}
             activeId={activeHistoryId}
+            storageWarning={storageWarning}
             onSelect={loadHistory}
             onDelete={deleteHistory}
             onClear={clearHistory}
+            onTogglePin={togglePin}
+            onShare={shareEntry}
+            onExportJson={exportJson}
+            onExportCsv={exportCsv}
+            onImportFile={importFile}
           />
+        }
+        feedbackSlot={
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={openFeedback}
+            aria-label="Send feedback on GitHub"
+            className="size-8"
+          >
+            <MessageSquareIcon className="size-4" />
+          </Button>
         }
         keySlot={
           <ApiKeyDialog
@@ -407,6 +642,11 @@ export default function Page() {
           {hasResults ? (
             <>
               <SummaryBar results={resultList} elapsedMs={elapsedMs} />
+              <ResultsToolbar
+                onShare={shareCurrent}
+                onExportJson={exportJson}
+                onExportCsv={exportCsv}
+              />
               <GridView
                 selectedIds={selectedIds}
                 modelById={modelById}
