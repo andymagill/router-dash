@@ -12,8 +12,12 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 import { Markdown } from "@/components/markdown"
-import { ProviderBadge } from "@/components/router-dash/provider-badge"
-import { type ORModel, providerOf, providerLabel } from "@/lib/openrouter"
+import {
+  ProviderBadge,
+  ProviderTag,
+} from "@/components/router-dash/provider-badge"
+import { providerLabel } from "@/lib/openrouter"
+import { type UnifiedModel, parseModelKey } from "@/lib/providers"
 import type { RunState, RunStatus } from "@/lib/types"
 import {
   formatNumber,
@@ -85,17 +89,20 @@ function FooterMetric({
 
 export function ResultCard({
   slot,
-  modelId,
+  modelKey,
   model,
   run,
 }: {
   slot: string
-  modelId: string
-  model: ORModel | undefined
+  modelKey: string
+  model: UnifiedModel | undefined
   run: RunState | undefined
 }) {
   const status = run?.status ?? "idle"
-  const slug = model ? providerOf(model) : modelId.split("/")[0]
+  const parsed = parseModelKey(modelKey)
+  const slug = model?.vendor ?? parsed.modelId.split("/")[0]
+  const displayName = model?.name ?? parsed.modelId
+  const provider = model?.provider ?? parsed.provider
   const [copied, setCopied] = React.useState(false)
 
   const copyOutput = async () => {
@@ -119,11 +126,15 @@ export function ResultCard({
           </span>
           <ProviderBadge slug={slug} />
           <div className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] leading-tight font-medium">
-              {model?.name ?? modelId}
+            <span className="flex items-center gap-1.5 truncate text-[13px] leading-tight font-medium">
+              <span className="truncate">{displayName}</span>
+              <ProviderTag provider={provider} />
             </span>
             <span className="truncate text-[10px] text-muted-foreground">
-              {providerLabel(slug)} · {formatContext(model?.context_length)} ctx
+              {providerLabel(slug)}
+              {model?.contextKnown
+                ? ` · ${formatContext(model.contextLength ?? 0)} ctx`
+                : ""}
             </span>
           </div>
         </div>

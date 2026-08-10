@@ -41,8 +41,9 @@ export function sanitizeErrorText(input: string): string {
   for (const { re, with: replacement } of REDACTIONS) {
     out = out.replace(re, replacement)
   }
-  // Drop stack-trace tails ("at fn (...)").
-  out = out.replace(/\n?\s*at\s+.*$/gms, "").trim()
+  // Drop stack-trace tails ("at fn (...)"). Avoid the dotAll flag so we don't
+  // require an es2018 target; match to end-of-line explicitly instead.
+  out = out.replace(/\n\s*at\s+[^\n]*/g, "").trim()
   // Collapse whitespace and cap length so a giant HTML body can't flood the UI.
   out = out.replace(/\s+/g, " ").trim()
   if (out.length > 500) out = `${out.slice(0, 500)}…`

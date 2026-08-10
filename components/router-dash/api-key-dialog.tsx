@@ -147,7 +147,12 @@ export function ApiKeyDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm" className="gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            data-api-key-trigger
+          >
             <KeyRoundIcon data-icon="inline-start" />
             {connectedCount > 0 ? (
               <Badge
