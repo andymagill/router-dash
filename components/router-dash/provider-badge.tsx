@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils"
 import { providerLabel } from "@/lib/openrouter"
+import { ADAPTERS, type ProviderId } from "@/lib/providers"
 
 const PROVIDER_COLORS: Record<string, string> = {
   openai: "bg-[oklch(0.7_0.14_155)]/15 text-[oklch(0.7_0.14_155)]",
@@ -35,6 +36,32 @@ export function ProviderBadge({
       aria-hidden
     >
       {label.slice(0, 2)}
+    </span>
+  )
+}
+
+const PROVIDER_TAG_COLORS: Record<ProviderId, string> = {
+  openrouter: "bg-primary/12 text-primary",
+  groq: "bg-[oklch(0.72_0.16_45)]/15 text-[oklch(0.72_0.16_45)]",
+}
+
+/** A small pill naming the routing provider (OpenRouter / Groq). */
+export function ProviderTag({
+  provider,
+  className,
+}: {
+  provider: ProviderId
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-4 items-center rounded px-1 text-[9px] font-semibold tracking-wide uppercase",
+        PROVIDER_TAG_COLORS[provider],
+        className,
+      )}
+    >
+      {ADAPTERS[provider].label}
     </span>
   )
 }

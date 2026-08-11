@@ -18,14 +18,18 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { type ORModel, type RunParams, supportsParam } from "@/lib/openrouter"
+import {
+  type UnifiedModel,
+  type RunParams,
+  supportsParam,
+} from "@/lib/providers"
 
 function ParamWarnings({
   models,
   param,
   label,
 }: {
-  models: ORModel[]
+  models: UnifiedModel[]
   param: string
   label: string
 }) {
@@ -35,7 +39,7 @@ function ParamWarnings({
     <div className="flex flex-col gap-1">
       {unsupported.map((m) => (
         <div
-          key={m.id}
+          key={m.key}
           className="flex items-center gap-1.5 text-[11px] text-[color:var(--warn)]"
         >
           <AlertTriangleIcon className="size-3 shrink-0" />
@@ -56,7 +60,7 @@ export function ParamsSheet({
 }: {
   params: RunParams
   onChange: (next: RunParams) => void
-  selectedModels: ORModel[]
+  selectedModels: UnifiedModel[]
 }) {
   const set = <K extends keyof RunParams>(key: K, value: RunParams[K]) =>
     onChange({ ...params, [key]: value })
