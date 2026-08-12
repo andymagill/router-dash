@@ -6,7 +6,8 @@ export const metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="flex flex-col gap-8 max-w-2xl mx-auto px-4 py-12">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-background">
+      <div className="flex flex-col gap-8 max-w-2xl mx-auto px-4 py-12">
       <div>
         <Link
           href="/"
@@ -99,6 +100,7 @@ export default function TermsPage() {
         >
           ← Back to RouterDash
         </Link>
+      </div>
       </div>
     </div>
   )
