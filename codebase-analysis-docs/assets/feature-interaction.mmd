@@ -1,0 +1,49 @@
+graph LR
+    RunState["RunState<br/>(per-model output,<br/>status, latency,<br/>cost, error)"]
+    HistoryEntry["HistoryEntry<br/>(timestamped benchmark<br/>run with results)"]
+
+    subgraph GridDisplay["Grid Display & Metrics"]
+        GridView["GridView"]
+        ResultCard["ResultCard"]
+        SummaryBar["SummaryBar"]
+    end
+
+    subgraph History["History Management"]
+        HistorySidebar["HistorySidebar"]
+        PinUnpin["Pin/Unpin Logic<br/>(HISTORY_LIMIT=25)"]
+    end
+
+    subgraph ShareExport["Share & Export"]
+        Share["lib/share.ts<br/>(lz-string compress)"]
+        Export["lib/export.ts<br/>(JSON/CSV envelope)"]
+    end
+
+    subgraph Observability["Analytics & Feedback"]
+        Analytics["lib/analytics.ts<br/>(event tracking)"]
+        Feedback["lib/feedback.ts<br/>(GitHub issue URL)"]
+    end
+
+    RunState -->|current| GridDisplay
+    GridDisplay -->|render| ResultCard
+    GridDisplay -->|aggregate| SummaryBar
+
+    HistoryEntry -->|populate| HistorySidebar
+    HistoryEntry -->|select to restore| RunState
+    HistorySidebar -->|pin/unpin| PinUnpin
+    PinUnpin -->|evict if over limit| HistoryEntry
+
+    RunState -->|encode| Share
+    Share -->|URL param| RunState
+
+    HistoryEntry -->|envelope| Export
+    Export -->|JSON/CSV file| HistoryEntry
+
+    RunState -->|track event| Analytics
+    HistoryEntry -->|include in diagnostics| Feedback
+
+    style RunState fill:#fff9c4
+    style HistoryEntry fill:#fff9c4
+    style GridDisplay fill:#e1f5fe
+    style History fill:#f3e5f5
+    style ShareExport fill:#ffe0b2
+    style Observability fill:#c8e6c9

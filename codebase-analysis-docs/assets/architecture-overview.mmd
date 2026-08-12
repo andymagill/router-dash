@@ -1,0 +1,85 @@
+graph TB
+    subgraph UI["Frontend Components"]
+        Header["Header<br/>(logo, theme toggle)"]
+        ModelPicker["ModelPicker<br/>(select up to 6 models)"]
+        PromptPanel["PromptPanel<br/>(prompt text, presets)"]
+        ParamsSheet["ParamsSheet<br/>(system prompt, temp, topP, maxTokens)"]
+        ApiKeyDialog["ApiKeyDialog<br/>(store provider keys)"]
+        GridView["GridView<br/>(results grid A/B/C...)"]
+        SummaryBar["SummaryBar<br/>(aggregate metrics)"]
+        ResultCard["ResultCard<br/>(per-model output)"]
+        HistorySidebar["HistorySidebar<br/>(run history)"]
+        ResultsToolbar["ResultsToolbar<br/>(share, export)"]
+    end
+
+    subgraph Container["Container (app/page.tsx)"]
+        AppState["App State<br/>(models, prompt, keys,<br/>history, results)"]
+        HandleRun["handleRun()<br/>(orchestrate benchmark)"]
+        History["History Manager<br/>(pin, delete, select)"]
+        Share["Share Handler<br/>(encode/decode)"]
+        Export["Export Handler<br/>(JSON/CSV)"]
+    end
+
+    subgraph Providers["Provider Abstraction (lib/providers/)"]
+        Registry["Registry (index.ts)<br/>getAdapter(),<br/>loadCatalog()"]
+        OpenRouter["OpenRouter Adapter<br/>(openrouter.ts)"]
+        Groq["Groq Adapter<br/>(groq.ts)"]
+        OpenAICompat["Shared HTTP Dispatch<br/>(openai-compat.ts)"]
+        ErrorHandling["Error Sanitization<br/>(errors.ts)"]
+        CatalogCache["Catalog Cache<br/>(catalog-cache.ts)"]
+    end
+
+    subgraph Storage["Storage & Persistence"]
+        LocalStorage["localStorage<br/>(routerdash:keys,<br/>routerdash:models,<br/>routerdash:history,<br/>routerdash:prompt, etc.)"]
+        SWRCache["SWR Cache<br/>(model catalogs)"]
+    end
+
+    subgraph External["External APIs"]
+        OpenRouterAPI["OpenRouter API<br/>https://openrouter.ai/api/v1"]
+        GroqAPI["Groq API<br/>https://api.groq.com/openai/v1"]
+    end
+
+    subgraph CrossCutting["Cross-Cutting Concerns"]
+        Analytics["Analytics (lib/analytics.ts)<br/>(allowlist + redact)"]
+        Feedback["Feedback (lib/feedback.ts)<br/>(GitHub issue builder)"]
+        Theming["Theming (use-theme.ts)<br/>(dark/light mode)"]
+    end
+
+    Header -.-> AppState
+    ModelPicker -.-> AppState
+    PromptPanel -.-> AppState
+    ParamsSheet -.-> AppState
+    ApiKeyDialog -.-> AppState
+    GridView -.-> AppState
+    SummaryBar -.-> AppState
+    ResultCard -.-> AppState
+    HistorySidebar -.-> AppState
+    ResultsToolbar -.-> AppState
+
+    AppState -->|trigger| HandleRun
+    HandleRun -->|load models| Registry
+    Registry -->|cache| CatalogCache
+    Registry -->|dispatch| OpenRouter
+    Registry -->|dispatch| Groq
+    OpenRouter -->|send request| OpenAICompat
+    Groq -->|send request| OpenAICompat
+    OpenAICompat -->|http| OpenRouterAPI
+    OpenAICompat -->|http| GroqAPI
+    OpenAICompat -->|sanitize errors| ErrorHandling
+    HandleRun -->|store results| AppState
+    AppState -->|persist| LocalStorage
+    AppState -->|track event| Analytics
+    AppState -->|build URL| Feedback
+    AppState -->|toggle| Theming
+
+    History -->|read/write| LocalStorage
+    Share -->|read/write| LocalStorage
+    Export -->|read| LocalStorage
+    SWRCache -->|back| Registry
+
+    style UI fill:#e1f5fe
+    style Container fill:#fff3e0
+    style Providers fill:#f3e5f5
+    style Storage fill:#e8f5e9
+    style External fill:#ffebee
+    style CrossCutting fill:#f1f8e9

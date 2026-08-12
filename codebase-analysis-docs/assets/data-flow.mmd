@@ -1,0 +1,58 @@
+sequenceDiagram
+    actor User
+    participant UI as UI Components
+    participant Container as app/page.tsx<br/>(Container)
+    participant Provider as lib/providers/*<br/>(Adapter Layer)
+    participant HTTP as fetch API
+    participant ExtAPI as Provider API<br/>(OpenRouter/Groq)
+    participant Storage as localStorage
+
+    User->>UI: Click "Run"
+    UI->>Container: handleRun()
+    Container->>Storage: Read selectedModels, prompt, params
+    Container->>Container: Create AbortController
+    Container->>Container: Initialize RunState map<br/>(all idle)
+    Container->>UI: Update UI (show spinner)
+
+    par Parallel Requests (Promise.all)
+        Container->>Provider: getAdapter(model.provider)
+        Provider->>Provider: Build request payload
+        Provider->>HTTP: POST /chat/completions<br/>(Bearer token, model, messages)
+        HTTP->>ExtAPI: Send HTTP request
+        ExtAPI-->>HTTP: JSON response<br/>(content, usage)
+        HTTP-->>Provider: Parse response
+        Provider->>Provider: Extract latency, cost
+        Provider-->>Container: Return CompletionOutcome
+    and Parallel Requests (2nd model)
+        Container->>Provider: getAdapter(model2.provider)
+        Provider->>HTTP: POST /chat/completions
+        HTTP->>ExtAPI: Send HTTP request
+        ExtAPI-->>HTTP: JSON response
+        HTTP-->>Provider: Parse response
+        Provider-->>Container: Return CompletionOutcome
+    and Parallel Requests (3rd model)
+        note over Container,Provider: ... repeat for up to 6 models
+    end
+
+    Container->>Container: RunState complete<br/>(all resolved/errored)
+    Container->>Container: Build HistoryEntry<br/>(id, createdAt, prompt,<br/>params, models, results)
+    Container->>Storage: Save to routerdash:history
+    Container->>UI: Update GridView, SummaryBar
+    UI-->>User: Display results
+
+    opt User exports
+        User->>UI: Click "Export JSON"
+        UI->>Container: handleExport()
+        Container->>Storage: Read history
+        Container->>Container: Build ExportEnvelope
+        Container->>Container: Download JSON file
+    end
+
+    opt User shares
+        User->>UI: Click "Share"
+        UI->>Container: buildShareLink()
+        Container->>Storage: Read current result
+        Container->>Container: Compress with lz-string
+        Container->>Container: Build URL param (?s=...)
+        Container->>UI: Copy to clipboard
+    end
