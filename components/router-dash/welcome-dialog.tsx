@@ -52,18 +52,16 @@ export function WelcomeDialog() {
       >
         <DialogHeader>
           <DialogTitle>Welcome to RouterDash</DialogTitle>
-          <DialogDescription className="space-y-3 pt-2">
-            <p>
-              RouterDash is a high-density developer playground to test and
-              compare LLM models side by side via the OpenRouter API. Run
-              parallel benchmarks, compare latency, token usage, and costs
-              across models—all in your browser.
-            </p>
-            <p>
-              Your API keys stay safe: they&apos;re stored only in your browser
-              and sent directly to providers. We never store them on our servers
-              or include them in shared or exported results.
-            </p>
+          <DialogDescription className="pt-2">
+            RouterDash is a high-density developer playground to test and
+            compare LLM models side by side via the OpenRouter API. Run parallel
+            benchmarks, compare latency, token usage, and costs across
+            models—all in your browser.
+            <br />
+            <br />
+            Your API keys stay safe: they&apos;re stored only in your browser
+            and sent directly to providers. We never store them on our servers
+            or include them in shared or exported results.
           </DialogDescription>
         </DialogHeader>
 
