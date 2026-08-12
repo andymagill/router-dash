@@ -47,6 +47,7 @@ export function WelcomeDialog() {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
+        disableOverlayDismiss
         className="max-w-full sm:max-w-[420px] p-0 gap-0 rounded-2xl overflow-hidden max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -74,7 +75,11 @@ export function WelcomeDialog() {
             <DialogDescription className="text-xs">
               RouterDash is a benchmarking playground to test and compare LLM models side by side. 
               To continue, please acknowledge that you understand and accept full responsibility for any costs, 
-              fees, and liabilities incurred while using RouterDash.
+              fees, and liabilities incurred while using RouterDash. Read <Link
+                  href="/terms"
+                  className="underline hover:text-foreground transition-colors"
+                >
+                   terms and conditions</Link> for more information. 
             </DialogDescription>
           </div>
 
@@ -93,13 +98,7 @@ export function WelcomeDialog() {
                 )}
               />
               <label htmlFor="terms-check" className="text-xs text-muted-foreground cursor-pointer group select-none">
-                I understand the risks and accept full responsibility for my usage.{" "}
-                <Link
-                  href="/terms"
-                  className="underline hover:text-foreground transition-colors"
-                >
-                  Read Terms
-                </Link>
+                I have read and accept the terms and conditions.{" "}
               </label>
             </div>
 
