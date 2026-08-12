@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
+import { WelcomeDialog } from '@/components/router-dash/welcome-dialog'
 import './globals.css'
 
 const inter = Inter({
@@ -77,6 +78,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster position="bottom-right" />
+        <WelcomeDialog />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

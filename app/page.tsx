@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import useSWR from "swr"
 import { toast } from "sonner"
 import {
@@ -555,6 +556,70 @@ export default function Page() {
     [copyShareUrl],
   )
 
+  const exportCurrentJson = React.useCallback(() => {
+    if (selectedKeys.length === 0) {
+      toast.error("No results to export yet")
+      return
+    }
+    const runs = selectedKeys
+      .map((k) => results.get(k))
+      .filter(Boolean) as RunState[]
+    if (runs.length === 0) {
+      toast.error("No results to export yet")
+      return
+    }
+    const entry: HistoryEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: Date.now(),
+      prompt,
+      params,
+      modelIds: selectedKeys,
+      results: runs,
+      elapsedMs,
+      totalCost: runs.reduce((sum, r) => sum + r.cost, 0),
+    }
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadTextFile(
+      `routerdash-run-${stamp}.json`,
+      serializeJsonExport([entry]),
+      "application/json",
+    )
+    trackEvent("result_exported", { exportFormat: "json", scope: "current" })
+    toast.success("Exported current run as JSON")
+  }, [selectedKeys, results, prompt, params, elapsedMs])
+
+  const exportCurrentCsv = React.useCallback(() => {
+    if (selectedKeys.length === 0) {
+      toast.error("No results to export yet")
+      return
+    }
+    const runs = selectedKeys
+      .map((k) => results.get(k))
+      .filter(Boolean) as RunState[]
+    if (runs.length === 0) {
+      toast.error("No results to export yet")
+      return
+    }
+    const entry: HistoryEntry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: Date.now(),
+      prompt,
+      params,
+      modelIds: selectedKeys,
+      results: runs,
+      elapsedMs,
+      totalCost: runs.reduce((sum, r) => sum + r.cost, 0),
+    }
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadTextFile(
+      `routerdash-run-${stamp}.csv`,
+      buildCsvExport([entry]),
+      "text/csv;charset=utf-8",
+    )
+    trackEvent("result_exported", { exportFormat: "csv", scope: "current" })
+    toast.success("Exported current run as CSV")
+  }, [selectedKeys, results, prompt, params, elapsedMs])
+
   const exportJson = React.useCallback(() => {
     if (history.length === 0) {
       toast.error("No history to export yet")
@@ -803,8 +868,8 @@ export default function Page() {
               <SummaryBar results={resultList} elapsedMs={elapsedMs} />
               <ResultsToolbar
                 onShare={shareCurrent}
-                onExportJson={exportJson}
-                onExportCsv={exportCsv}
+                onExportJson={exportCurrentJson}
+                onExportCsv={exportCurrentCsv}
               />
               <GridView
                 selectedKeys={selectedKeys}
@@ -822,14 +887,23 @@ export default function Page() {
       </main>
 
       <footer className="mt-4 border-t border-border/50 py-4 text-center">
-        <a
-          href="https://magill.dev"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Built by Andrew Magill
-        </a>
+        <div className="flex flex-wrap items-center justify-center gap-1 text-xs text-muted-foreground">
+          <a
+            href="https://magill.dev"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            Built by Andrew Magill
+          </a>
+          <span>·</span>
+          <Link
+            href="/terms"
+            className="transition-colors hover:text-foreground"
+          >
+            Terms
+          </Link>
+        </div>
       </footer>
     </div>
   )

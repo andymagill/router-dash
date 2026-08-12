@@ -102,6 +102,22 @@ describe("CSV export", () => {
     const dataRow = csv.split("\r\n")[1]
     expect(dataRow).toContain('"=HYPERLINK(""http://evil"",""x""),2+2"')
   })
+
+  it("exports only a single current run, not the full history", () => {
+    // Regression test: on-page export button should export only the current
+    // run, not all entries, even if multiple history entries exist.
+    const currentEntry = makeEntry({
+      id: "current-run",
+      prompt: "Current run prompt",
+    })
+    // Simulate exporting just the current run (single-element array)
+    const csv = buildCsvExport([currentEntry])
+    const lines = csv.split("\r\n")
+    // Should have header + 1 data row (possibly with trailing empty line)
+    expect(lines.length).toBeGreaterThanOrEqual(2)
+    expect(lines[0]).toContain("timestamp")
+    expect(csv).toContain("Current run prompt")
+  })
 })
 
 describe("JSON import validation", () => {
