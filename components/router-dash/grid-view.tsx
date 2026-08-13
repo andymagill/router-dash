@@ -16,16 +16,17 @@ export function GridView({
   modelByKey: Map<string, UnifiedModel>
   results: Map<string, RunState>
 }) {
+  const resultKeys = Array.from(results.keys())
   const cols =
-    selectedKeys.length >= 3
+    resultKeys.length >= 3
       ? "lg:grid-cols-2 2xl:grid-cols-4"
-      : selectedKeys.length === 2
+      : resultKeys.length === 2
         ? "lg:grid-cols-2"
         : "lg:grid-cols-1"
 
   return (
     <div className={cn("grid grid-cols-1 gap-3", cols)}>
-      {selectedKeys.map((key, idx) => (
+      {resultKeys.map((key, idx) => (
         <ResultCard
           key={key}
           slot={SLOT_LABELS[idx] ?? String(idx + 1)}

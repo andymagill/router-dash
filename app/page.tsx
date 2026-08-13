@@ -229,9 +229,7 @@ export default function Page() {
   )
 
   const hasResults = results.size > 0
-  const resultList = selectedKeys
-    .map((k) => results.get(k))
-    .filter(Boolean) as RunState[]
+  const resultList = Array.from(results.values())
 
   const active = running || hasResults
   const prevActive = React.useRef(false)
@@ -311,18 +309,20 @@ export default function Page() {
 
     const runKeys = [...selectedKeys]
 
-    const seeded = new Map<string, RunState>()
-    for (const key of runKeys) {
-      seeded.set(key, {
-        modelId: key,
-        status: "running",
-        content: "",
-        usage: null,
-        cost: 0,
-        latencyMs: 0,
-      })
-    }
-    setResults(seeded)
+    setResults((prev) => {
+      const next = new Map(prev)
+      for (const key of runKeys) {
+        next.set(key, {
+          modelId: key,
+          status: "running",
+          content: "",
+          usage: null,
+          cost: 0,
+          latencyMs: 0,
+        })
+      }
+      return next
+    })
 
     const start = performance.now()
     setElapsedMs(0)
