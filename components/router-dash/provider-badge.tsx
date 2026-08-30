@@ -43,9 +43,10 @@ export function ProviderBadge({
 const PROVIDER_TAG_COLORS: Record<ProviderId, string> = {
   openrouter: "bg-primary/12 text-primary",
   groq: "bg-[oklch(0.72_0.16_45)]/15 text-[oklch(0.72_0.16_45)]",
+  cerebras: "bg-[oklch(0.66_0.18_300)]/15 text-[oklch(0.66_0.18_300)]",
 }
 
-/** A small pill naming the routing provider (OpenRouter / Groq). */
+/** A small pill naming the routing provider (OpenRouter / Groq / Cerebras). */
 export function ProviderTag({
   provider,
   className,

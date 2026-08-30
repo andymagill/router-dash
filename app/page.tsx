@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import Link from "next/link"
-import useSWR from "swr"
 import { toast } from "sonner"
 import {
   RefreshCwIcon,
@@ -15,7 +14,6 @@ import {
 
 import { Header } from "@/components/router-dash/header"
 import { ModelPicker, MAX_MODELS } from "@/components/router-dash/model-picker"
-import type { ProviderState } from "@/components/router-dash/model-picker"
 import { PromptPanel } from "@/components/router-dash/prompt-panel"
 import { ParamsSheet } from "@/components/router-dash/params-sheet"
 import { ApiKeyDialog } from "@/components/router-dash/api-key-dialog"
@@ -32,6 +30,7 @@ import { Badge } from "@/components/ui/badge"
 
 import { useTheme } from "@/hooks/use-theme"
 import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useCatalogs } from "@/hooks/use-catalogs"
 import {
   type UnifiedModel,
   type RunParams,
@@ -39,7 +38,6 @@ import {
   PROVIDER_ORDER,
   ADAPTERS,
   getAdapter,
-  loadCatalog,
   clearCatalogCache,
   estimateCost,
   parseModelKey,
@@ -71,7 +69,11 @@ const DEFAULT_PARAMS: RunParams = {
   maxTokens: 1024,
 }
 
-const EMPTY_KEYS: Record<ProviderId, string> = { openrouter: "", groq: "" }
+const EMPTY_KEYS: Record<ProviderId, string> = {
+  openrouter: "",
+  groq: "",
+  cerebras: "",
+}
 
 /** Resolve a selected key to a model, synthesizing a stub if it's not in the
  * loaded catalog (e.g. loaded from history while its provider key is absent). */
@@ -87,8 +89,8 @@ function resolveModel(
     provider,
     modelId,
     name: modelId,
-    vendor:
-      provider === "openrouter" ? vendorSlugFromId(modelId) : "unknown",
+    // OpenRouter ids are "vendor/model"; other providers' ids are bare.
+    vendor: modelId.includes("/") ? vendorSlugFromId(modelId) : "unknown",
     contextKnown: false,
     pricingKnown: false,
     isFree: false,
@@ -98,9 +100,16 @@ function resolveModel(
 export default function Page() {
   const { theme, toggle } = useTheme()
 
-  const [keys, setKeys] = useLocalStorage<Record<ProviderId, string>>(
+  const [storedKeys, setKeys] = useLocalStorage<Record<ProviderId, string>>(
     "routerdash:keys",
     EMPTY_KEYS,
+  )
+  // Backfill any provider added after a browser's keys were first saved
+  // (e.g. Cerebras, for a value saved before it existed) so every consumer
+  // can safely call `.trim()` on `keys[provider]` without an undefined check.
+  const keys = React.useMemo<Record<ProviderId, string>>(
+    () => ({ ...EMPTY_KEYS, ...storedKeys }),
+    [storedKeys],
   )
   const [selectedKeys, setSelectedKeys] = useLocalStorage<string[]>(
     "routerdash:models",
@@ -182,46 +191,14 @@ export default function Page() {
     })
   }, [setKeys, setSelectedKeys, setHistory])
 
-  // Per-provider catalog loading. OpenRouter's catalog is public; Groq needs a
-  // key, so we only fetch it once a key is present.
-  const orSwr = useSWR(
-    ["catalog", "openrouter"],
-    () => loadCatalog("openrouter", keys.openrouter),
-    { revalidateOnFocus: false, dedupingInterval: 60_000 },
-  )
-  const groqSwr = useSWR(
-    keys.groq.trim() ? ["catalog", "groq", keys.groq] : null,
-    () => loadCatalog("groq", keys.groq),
-    { revalidateOnFocus: false, dedupingInterval: 60_000 },
-  )
-
-  const models = React.useMemo<UnifiedModel[]>(
-    () => [...(orSwr.data ?? []), ...(groqSwr.data ?? [])],
-    [orSwr.data, groqSwr.data],
-  )
-
-  const modelByKey = React.useMemo(() => {
-    const map = new Map<string, UnifiedModel>()
-    for (const m of models) map.set(m.key, m)
-    return map
-  }, [models])
-
-  const providerStates = React.useMemo<Record<ProviderId, ProviderState>>(() => {
-    const swrByProvider = { openrouter: orSwr, groq: groqSwr } as const
-    const out = {} as Record<ProviderId, ProviderState>
-    for (const p of PROVIDER_ORDER) {
-      const swr = swrByProvider[p]
-      out[p] = {
-        connected: keys[p].trim().length > 0,
-        loading: swr.isLoading,
-        error: swr.error ? (swr.error as Error).message : null,
-        count: models.filter((m) => m.provider === p).length,
-      }
-    }
-    return out
-  }, [orSwr, groqSwr, keys, models])
-
-  const anyLoading = orSwr.isLoading || groqSwr.isLoading
+  const {
+    models,
+    modelByKey,
+    providerStates,
+    anyLoading,
+    refreshProvider,
+    refreshAll,
+  } = useCatalogs(keys)
 
   const selectedModels = React.useMemo(
     () => selectedKeys.map((k) => resolveModel(k, modelByKey)),
@@ -245,20 +222,6 @@ export default function Page() {
       timerRef.current = null
     }
   }, [])
-
-  const refreshProvider = React.useCallback(
-    (provider: ProviderId) => {
-      clearCatalogCache(provider)
-      if (provider === "openrouter") void orSwr.mutate()
-      else void groqSwr.mutate()
-    },
-    [orSwr, groqSwr],
-  )
-
-  const refreshAll = React.useCallback(() => {
-    refreshProvider("openrouter")
-    if (keys.groq.trim()) refreshProvider("groq")
-  }, [refreshProvider, keys.groq])
 
   const saveKey = React.useCallback(
     (provider: ProviderId, key: string) =>
@@ -285,7 +248,7 @@ export default function Page() {
 
   const handleRun = React.useCallback(async () => {
     if (connectedCount === 0) {
-      toast.error("Add an API key (OpenRouter or Groq) first")
+      toast.error("Add a provider API key first")
       return
     }
     if (selectedKeys.length === 0) {
@@ -963,7 +926,7 @@ function EmptyState({
       <h2 className="text-base font-semibold">Ready to benchmark</h2>
       <p className="mt-1 max-w-sm text-pretty text-sm text-muted-foreground">
         {!hasKey
-          ? "Add an OpenRouter or Groq API key, pick a few models, and run one prompt across all of them."
+          ? "Add a provider API key, pick a few models, and run one prompt across all of them."
           : !hasSelection
             ? `Select up to ${MAX_MODELS} models above, then hit Run to compare their responses, latency, and cost.`
             : "Hit Run Benchmarks to fan your prompt out across the selected models."}

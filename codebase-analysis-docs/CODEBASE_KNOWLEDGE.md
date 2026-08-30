@@ -26,7 +26,7 @@
 RouterDash is a **browser-based LLM benchmarking playground** that lets developers compare AI models side by side, **without ever trusting a server with their API keys**.
 
 **Target users:** AI/ML engineers, API consumers, prompt engineers who want to:
-- Test multiple LLM models (from OpenRouter or Groq) with the same prompt
+- Test multiple LLM models (from OpenRouter, Groq, or Cerebras) with the same prompt
 - Compare response quality, latency, token usage, and estimated cost
 - Save benchmark runs to history for later review or sharing
 - Export results as JSON or CSV for analysis
@@ -35,7 +35,7 @@ RouterDash is a **browser-based LLM benchmarking playground** that lets develope
 
 ### Core Value Propositions
 
-1. **BYOK (Bring Your Own Key)** — Users provide their own API keys; RouterDash never stores, logs, or transmits them through any server. All API calls go directly from the browser to the provider (OpenRouter or Groq). **Security by architecture, not policy.**
+1. **BYOK (Bring Your Own Key)** — Users provide their own API keys; RouterDash never stores, logs, or transmits them through any server. All API calls go directly from the browser to the provider (OpenRouter, Groq, or Cerebras). **Security by architecture, not policy.**
 
 2. **Real-time parallel benchmarking** — Select up to 6 models and run a single prompt across all of them simultaneously in the browser. Results stream in as each model completes.
 
@@ -43,7 +43,7 @@ RouterDash is a **browser-based LLM benchmarking playground** that lets develope
 
 4. **Persistent history & sharing** — Results are saved locally in browser storage. Runs can be pinned to prevent eviction, exported for external analysis, or shared via URL (compressed, optionally truncated to fit URL length limits).
 
-5. **Multi-provider extensible architecture** — Currently supports OpenRouter (broad model catalog, public listing) and Groq (fast inference). New providers can be added by implementing the `ProviderAdapter` interface.
+5. **Multi-provider extensible architecture** — Currently supports OpenRouter (broad model catalog, public listing), Groq (fast inference), and Cerebras (fast inference). New providers can be added by implementing the `ProviderAdapter` interface.
 
 ### How Features Relate
 
@@ -108,7 +108,8 @@ router-dash/
 │
 ├── hooks/
 │   ├── use-local-storage.ts    # Custom hook: useState + localStorage sync
-│   └── use-theme.ts            # Dark/light theme toggle
+│   ├── use-theme.ts            # Dark/light theme toggle
+│   └── use-catalogs.ts         # One useSWR per provider; merges models/provider states/refresh
 │
 ├── lib/
 │   ├── types.ts                # Core types (RunState, HistoryEntry, ViewMode)
@@ -127,6 +128,7 @@ router-dash/
 │   │   ├── index.ts            # Registry: ADAPTERS, getAdapter(), loadCatalog()
 │   │   ├── openrouter.ts       # OpenRouter adapter (public catalog, openai-compat)
 │   │   ├── groq.ts             # Groq adapter (key-gated catalog, openai-compat)
+│   │   ├── cerebras.ts         # Cerebras adapter (key-gated catalog, openai-compat)
 │   │   ├── openai-compat.ts    # Shared HTTP dispatcher for openai-compatible endpoints
 │   │   ├── errors.ts           # ProviderError + aggressive sanitization/redaction
 │   │   ├── compat.ts           # Chat-compatibility filters, vendor slug derivation
@@ -166,7 +168,7 @@ pnpm lint         # ESLint
 
 ### Notable Dependency Choices
 
-- **No backend SDK imports** — No `openai`, `@anthropic-ai/sdk`, `groq-sdk`. All HTTP calls are hand-rolled `fetch()` against OpenAI-compatible REST endpoints for maximum simplicity and control.
+- **No backend SDK imports** — No `openai`, `@anthropic-ai/sdk`, `groq-sdk`, `@cerebras/cerebras_cloud_sdk`. All HTTP calls are hand-rolled `fetch()` against OpenAI-compatible REST endpoints for maximum simplicity and control.
 - **No global state manager** — No Redux, Zustand, or Recoil. State is centralized in `app/page.tsx` and persisted via `useLocalStorage` hook.
 - **No markdown/syntax-highlight libraries** — Custom regex-based Markdown parser (`components/markdown.tsx`) and tokenizer-based syntax highlighter (`components/code-block.tsx`) to avoid dependencies.
 - **next-themes in dependencies but unused** — The custom `use-theme.ts` hook manages theme directly; next-themes is present but not used (low priority cleanup).
@@ -285,7 +287,7 @@ sequenceDiagram
     participant Container as app/page.tsx<br/>(Container)
     participant Provider as lib/providers/*<br/>(Adapter Layer)
     participant HTTP as fetch API
-    participant ExtAPI as Provider API<br/>(OpenRouter/Groq)
+    participant ExtAPI as Provider API<br/>(OpenRouter/Groq/Cerebras)
     participant Storage as localStorage
 
     User->>UI: Click "Run"
@@ -359,24 +361,24 @@ sequenceDiagram
 
 3. **Two-level caching for catalog data**:
    - **localStorage TTL cache** (`lib/providers/catalog-cache.ts`): 1-hour TTL, versioned, persists across page refreshes.
-   - **SWR cache** (`app/page.tsx` `useSWR(["catalog", provider])`): React-level request deduping, revalidation on focus, refresh on key change.
+   - **SWR cache** (`hooks/use-catalogs.ts` `useSWR(["catalog", provider])`): React-level request deduping, revalidation on focus, refresh on key change.
 
 4. **Why this works**: RouterDash is a single-page app with modest state complexity (6 models max, 25-entry history). Container-driven state + localStorage is sufficient and keeps the codebase simple (no extra abstraction layers like Redux).
 
 ### Provider Abstraction Layer
 
-The **core domain logic** of RouterDash is the provider abstraction (`lib/providers/`). It abstracts OpenRouter and Groq behind a common interface so the rest of the app doesn't know (or care) which provider is being used.
+The **core domain logic** of RouterDash is the provider abstraction (`lib/providers/`). It abstracts OpenRouter, Groq, and Cerebras behind a common interface so the rest of the app doesn't know (or care) which provider is being used.
 
 **Central interface** (`lib/providers/types.ts`):
 
 ```typescript
 interface ProviderAdapter {
-  id: ProviderId                                    // "openrouter" | "groq"
+  id: ProviderId                                    // "openrouter" | "groq" | "cerebras"
   label: string                                     // Display name
   keyUrl: string                                    // Where to create a key
   keyPlaceholder: string
   keyHint: string                                   // "starts with sk-or-v1-..."
-  requiresKeyForCatalog: boolean                    // OpenRouter: false, Groq: true
+  requiresKeyForCatalog: boolean                    // OpenRouter: false, Groq/Cerebras: true
   fetchCatalog(apiKey, signal?): Promise<UnifiedModel[]>
   runCompletion(apiKey, model, prompt, params, signal?): Promise<CompletionOutcome>
 }
@@ -385,9 +387,9 @@ interface ProviderAdapter {
 **Key design decisions**:
 
 - **Composite model keys** (`${provider}:${modelId}`): Stable, globally unique identifiers that survive across app restarts. Includes a legacy fallback so bare OpenRouter IDs from old saves become `openrouter:...`.
-- **UnifiedModel type**: A normalized, provider-agnostic model description. Only fields that are *actually known* are populated; unknown fields stay `undefined` (e.g., Groq's catalog has no pricing data, so `pricingKnown: false` is explicit, never fabricated).
-- **Both adapters speak OpenAI-compatible REST** (OpenRouter and Groq both implement `POST /chat/completions`), so `lib/providers/openai-compat.ts` is shared HTTP dispatcher.
-- **Groq requires a key for catalog** but OpenRouter's is public → this differences is encapsulated in `requiresKeyForCatalog` and handled transparently in `loadCatalog`.
+- **UnifiedModel type**: A normalized, provider-agnostic model description. Only fields that are *actually known* are populated; unknown fields stay `undefined` (e.g., Groq's and Cerebras' catalogs have no pricing data, so `pricingKnown: false` is explicit, never fabricated).
+- **All three adapters speak OpenAI-compatible REST** (`POST /chat/completions`), so `lib/providers/openai-compat.ts` is a shared HTTP dispatcher.
+- **Groq and Cerebras require a key for catalog** but OpenRouter's is public → this difference is encapsulated in `requiresKeyForCatalog` and handled transparently in `loadCatalog`.
 
 **Registry** (`lib/providers/index.ts`):
 
@@ -395,6 +397,7 @@ interface ProviderAdapter {
 const ADAPTERS: Record<ProviderId, ProviderAdapter> = {
   openrouter: openRouterAdapter,
   groq: groqAdapter,
+  cerebras: cerebrasAdapter,
 }
 
 export function getAdapter(provider: ProviderId): ProviderAdapter {
@@ -420,7 +423,7 @@ export async function loadCatalog(provider, apiKey, { force, signal }): Promise<
 RouterDash's single biggest security concern is that **API keys must never leak via error messages**. When a provider returns an error (401, 429, 5xx, network timeout), the app:
 
 1. Categorizes the error by HTTP status or exception type (`ErrorCategory = "auth" | "rate_limit" | "quota" | "bad_request" | "server" | "network" | "cancelled" | "unknown"`).
-2. Builds a user-facing summary (`summaryForCategory(provider, category)` → "API key invalid for OpenRouter" or "Rate limited by Groq, try again later").
+2. Builds a user-facing summary (`summaryForCategory(category, provider)` → "OpenRouter rejected the API key" or "Groq rate limit hit" or "Cerebras had a server error"), using the shared `PROVIDER_LABELS` map so no provider is hardcoded into the wording.
 3. **Aggressively redacts the detail text** via `sanitizeErrorText()`:
    - Strips bearer tokens (`Authorization: Bearer ...`), API key patterns (`sk-or-...`, `gsk_...`, `sk-...`).
    - Strips any JSON field named `api_key`, `token`, `secret`, `password`.
@@ -525,7 +528,7 @@ Each adapter builds a request, calls `postChatCompletion()` (shared HTTP dispatc
 **Purpose:** Browse available models, filter by provider/availability/context length, select up to 6 for a run.
 
 **Entry point:** `components/router-dash/model-picker.tsx`, component `ModelPicker`  
-**Related files:** `lib/providers/index.ts` (loadCatalog), `lib/providers/catalog-cache.ts` (cache TTL)
+**Related files:** `hooks/use-catalogs.ts` (per-provider SWR + merge), `lib/providers/index.ts` (loadCatalog), `lib/providers/catalog-cache.ts` (cache TTL)
 
 **Key constants:**
 - `MAX_MODELS = 6` (max models per run)
@@ -533,18 +536,29 @@ Each adapter builds a request, calls `postChatCompletion()` (shared HTTP dispatc
 
 **How it works:**
 
-1. **Catalog loading:** `app/page.tsx` uses `useSWR` to load catalogs for each provider:
+1. **Catalog loading:** `hooks/use-catalogs.ts` calls one explicit `useSWR` per provider (React's rules-of-hooks forbid looping `useSWR` over `PROVIDER_ORDER`) and merges the results generically:
    ```typescript
-   const { data: openrouterModels } = useSWR(["catalog", "openrouter"], () => loadCatalog("openrouter", "", {}))
-   const { data: groqModels, isLoading: groqLoading } = useSWR(
-     apiKeys.groq ? ["catalog", "groq", apiKeys.groq] : null,  // don't load if no key
-     ([, , key]) => loadCatalog("groq", key, {})
-   )
+   function useProviderCatalog(provider: ProviderId, apiKey: string) {
+     const trimmed = apiKey.trim()
+     const swrKey = ADAPTERS[provider].requiresKeyForCatalog
+       ? (trimmed ? ["catalog", provider, trimmed] : null)  // don't load if no key
+       : ["catalog", provider]                               // public catalog
+     return useSWR(swrKey, () => loadCatalog(provider, trimmed), { ... })
+   }
+
+   export function useCatalogs(keys: Record<ProviderId, string>) {
+     const openrouter = useProviderCatalog("openrouter", keys.openrouter)
+     const groq = useProviderCatalog("groq", keys.groq)
+     const cerebras = useProviderCatalog("cerebras", keys.cerebras)
+     // models / modelByKey / providerStates / anyLoading / refreshProvider / refreshAll
+     // derived by iterating PROVIDER_ORDER over { openrouter, groq, cerebras }
+   }
    ```
+   `app/page.tsx` calls `useCatalogs(keys)` once and destructures the result. Adding a fourth provider means one more `useProviderCatalog` call and one more entry in the `swrByProvider` literal — everything else (models list, provider states, refresh) is generic.
 
 2. **ModelPicker state:**
    - `selectedModels: UnifiedModel[]` (up to 6)
-   - `providerFilters: Set<ProviderId>` (toggle OpenRouter/Groq)
+   - `providerFilters: Set<ProviderId>` (toggle OpenRouter/Groq/Cerebras)
    - `metaFilters: { free?: boolean, longContext?: boolean }`
    - Search text input (filtered via substring match on name/vendor/modelId)
 
@@ -618,20 +632,20 @@ interface RunParams {
 
 **How it works:**
 
-1. Dialog with one key field per provider (OpenRouter, Groq).
+1. Dialog with one key field per provider (OpenRouter, Groq, Cerebras).
 2. Each field is a masked `<Input type="password">` with reveal/hide toggle, clear button, and a link to the provider's key creation page.
 3. Key hints (e.g., "Starts with `sk-or-v1-...`") are pulled from the adapter metadata (`ADAPTERS[provider].keyHint`).
 4. Keys are stored **only** in localStorage under `routerdash:keys` (unencrypted, plain JSON).
-5. **Never transmitted to any RouterDash server** — only sent directly to the provider (OpenRouter or Groq) as `Authorization: Bearer <key>` headers.
+5. **Never transmitted to any RouterDash server** — only sent directly to the provider (OpenRouter, Groq, or Cerebras) as `Authorization: Bearer <key>` headers.
 6. Credentials are never included in history exports, share links, or analytics (guaranteed by type design — `RunState` and `HistoryEntry` never carry keys).
 
 **Dialog copy explicitly states:** "Keys are stored only in this browser's localStorage and sent directly to each provider. They never touch our servers."
 
 ### 6. Provider/Model Catalog Abstraction
 
-**Purpose:** Abstract OpenRouter and Groq behind a unified interface so the app doesn't know which provider it's using.
+**Purpose:** Abstract OpenRouter, Groq, and Cerebras behind a unified interface so the app doesn't know which provider it's using.
 
-**Entry points:** `lib/providers/index.ts` (registry), `lib/providers/openrouter.ts` (OpenRouter), `lib/providers/groq.ts` (Groq)
+**Entry points:** `lib/providers/index.ts` (registry), `lib/providers/openrouter.ts` (OpenRouter), `lib/providers/groq.ts` (Groq), `lib/providers/cerebras.ts` (Cerebras)
 
 **UnifiedModel shape** (`lib/providers/types.ts`):
 
@@ -674,9 +688,18 @@ interface UnifiedModel {
 - **Pricing:** Not available from Groq's catalog API → `pricingKnown: false` for all Groq models
 - **Max tokens param:** Uses `max_completion_tokens` (Groq's name) instead of OpenRouter's `max_tokens`
 
+#### Cerebras Adapter (`lib/providers/cerebras.ts`)
+
+- **Catalog:** `GET https://api.cerebras.ai/v1/models` (requires API key)
+- **Completion:** `POST https://api.cerebras.ai/v1/chat/completions`
+- **Filtering:** Excludes non-chat models (same as OpenRouter/Groq)
+- **Pricing:** Not available from Cerebras' catalog API → `pricingKnown: false` for all Cerebras models
+- **Max tokens param:** Uses `max_completion_tokens`, like Groq, not OpenRouter's `max_tokens`
+- **Context length:** Only set when the catalog actually reports `context_window`; otherwise left unknown rather than guessed
+
 #### Shared HTTP Dispatch (`lib/providers/openai-compat.ts`)
 
-Both adapters call a shared `postChatCompletion(req)` function that:
+All three adapters call a shared `postChatCompletion(req)` function that:
 
 1. Builds the HTTP request with the user's API key as a Bearer token
 2. Sends `POST /chat/completions` with request body `{ model, messages: [{ role, content }], temperature, top_p, max_tokens, ... }`
@@ -999,6 +1022,40 @@ const groqAdapter: ProviderAdapter = {
 - No pricing data in catalog → users can't see cost estimates for Groq models
 - Catalog requires authentication → `ModelPicker` won't load Groq models until user enters a key
 
+#### Cerebras Adapter Specifics
+
+**File:** `lib/providers/cerebras.ts`
+
+```typescript
+const cerebrasAdapter: ProviderAdapter = {
+  id: "cerebras",
+  label: "Cerebras",
+  keyUrl: "https://cloud.cerebras.ai/",
+  keyPlaceholder: "csk-...",
+  keyHint: "Starts with csk-...",
+  requiresKeyForCatalog: true,  // <-- same as Groq
+
+  async fetchCatalog(apiKey, signal) {
+    // GET https://api.cerebras.ai/v1/models (requires apiKey)
+    // Normalize each CerebrasModel to UnifiedModel
+    // No pricing data available; set pricingKnown: false
+    return models
+  },
+
+  async runCompletion(apiKey, model, prompt, params, signal) {
+    // POST https://api.cerebras.ai/v1/chat/completions
+    // Use max_completion_tokens instead of max_tokens (same as Groq)
+    return postChatCompletion({ ..., max_completion_tokens })
+  }
+}
+```
+
+**Provider-specific notes:**
+- Cerebras specializes in fast inference (its main draw for a latency benchmark)
+- No pricing data in catalog → users can't see cost estimates for Cerebras models
+- Catalog requires authentication → `ModelPicker` won't load Cerebras models until user enters a key
+- Model IDs are bare (no `vendor/model` slash), so `vendorSlugFromOwner(owned_by)` derives the monogram, not `vendorSlugFromId`
+
 #### Error Handling & Sanitization (`lib/providers/errors.ts`)
 
 ```typescript
@@ -1013,7 +1070,7 @@ class ProviderError extends Error {
 function sanitizeErrorText(text: string): string {
   // Apply REDACTIONS regex list:
   // - Strip "Authorization: Bearer ..."
-  // - Strip API key patterns (sk-or-*, gsk_*, sk-*)
+  // - Strip API key patterns (sk-or-*, gsk_*, csk-*, sk-*)
   // - Strip JSON fields: api_key, token, secret, password
   // - Strip file paths (Windows & Unix)
   return sanitized
@@ -1034,7 +1091,7 @@ function categorizeStatus(status: number): ErrorCategory {
 }
 ```
 
-Each category has a user-facing summary (e.g., "Invalid API key for OpenRouter" for auth errors).
+Each category has a user-facing summary built from `PROVIDER_LABELS[provider]` (e.g., "OpenRouter rejected the API key (check it in Keys)" for auth errors) — this is a lookup, not a per-provider ternary, so a new provider's errors are labeled correctly automatically.
 
 #### Compatibility Filters (`lib/providers/compat.ts`)
 
@@ -1099,6 +1156,7 @@ const CATALOG_TTL_MS = 60 * 60 * 1000  // 1 hour
 const ADAPTERS: Record<ProviderId, ProviderAdapter> = {
   openrouter: openRouterAdapter,
   groq: groqAdapter,
+  cerebras: cerebrasAdapter,
 }
 
 export function getAdapter(provider: ProviderId): ProviderAdapter {
@@ -1107,7 +1165,7 @@ export function getAdapter(provider: ProviderId): ProviderAdapter {
   return adapter
 }
 
-export const PROVIDER_ORDER: ProviderId[] = ["openrouter", "groq"]  // UI display order
+export const PROVIDER_ORDER: ProviderId[] = ["openrouter", "groq", "cerebras"]  // UI display order
 
 export async function loadCatalog(
   provider: ProviderId,
@@ -1155,29 +1213,32 @@ API keys are stored **unencrypted in localStorage**. The only protection against
 
 ### Critical: Composite Model Keys Must Be Preserved
 
-The app uses composite model keys `${provider}:${modelId}` (e.g., `"openrouter:gpt-4o-mini"`, `"groq:llama-3.3-70b-versatile"`). Existing history and shared links rely on this format.
+The app uses composite model keys `${provider}:${modelId}` (e.g., `"openrouter:gpt-4o-mini"`, `"groq:llama-3.3-70b-versatile"`, `"cerebras:llama-3.3-70b"`). Existing history and shared links rely on this format.
 
-**Backwards compatibility:** Bare OpenRouter IDs from old saves (e.g., `"gpt-4o"` with no prefix) are handled by `parseModelKey()` which defaults to treating unprefixed IDs as OpenRouter.
+**Backwards compatibility:** Bare OpenRouter IDs from old saves (e.g., `"gpt-4o"` with no prefix) are handled by `parseModelKey()` which defaults to treating unprefixed IDs as OpenRouter. `parseModelKey`'s prefix check uses `isProviderId(prefix)` (derived from `PROVIDER_IDS`), not a hardcoded string comparison — this is what let Cerebras support land without a silent fallback bug where `cerebras:...` keys resolved to OpenRouter.
 
-**Rule:** When adding a third provider:
+**Rule:** When adding a fourth provider:
 1. Register it in `lib/providers/index.ts` (ADAPTERS, PROVIDER_ORDER).
 2. Use the composite key format immediately.
 3. Never change the key format retroactively without a migration.
 
-### Groq Requires a Key for Catalog
+### Key-Gated Catalogs (Groq, Cerebras)
 
-OpenRouter's model catalog is public (no key needed). Groq's catalog requires authentication.
+OpenRouter's model catalog is public (no key needed). Groq's and Cerebras' catalogs both require authentication.
 
-**Implication:** In `app/page.tsx`, the `useSWR` hook for Groq catalog is conditional:
+**Implication:** `hooks/use-catalogs.ts` gates each provider's `useSWR` key on `ADAPTERS[provider].requiresKeyForCatalog`:
 
 ```typescript
-const { data: groqModels } = useSWR(
-  apiKeys.groq ? ["catalog", "groq", apiKeys.groq] : null,
-  ([, , key]) => loadCatalog("groq", key, {})
-)
+function useProviderCatalog(provider: ProviderId, apiKey: string) {
+  const trimmed = apiKey.trim()
+  const swrKey = ADAPTERS[provider].requiresKeyForCatalog
+    ? (trimmed ? ["catalog", provider, trimmed] : null)
+    : ["catalog", provider]
+  return useSWR(swrKey, () => loadCatalog(provider, trimmed), { ... })
+}
 ```
 
-If no Groq key is provided, the catalog doesn't load and Groq models don't appear in the picker. This is by design.
+If no key is provided for a key-gated provider, its catalog doesn't load and its models don't appear in the picker (the model dialog also hides that provider's filter toggle and status row entirely — `availableProviders` in `model-dialog.tsx` filters on the same `requiresKeyForCatalog` flag). This is by design.
 
 ### No Streaming: Full JSON Responses Only
 
@@ -1310,7 +1371,7 @@ interface HistoryEntry {
 ```typescript
 interface UnifiedModel {
   key: string                     // "${provider}:${modelId}"
-  provider: ProviderId            // "openrouter" | "groq"
+  provider: ProviderId            // "openrouter" | "groq" | "cerebras"
   modelId: string                 // Native ID: "openai/gpt-4o"
   name: string                    // Display name
   vendor: string                  // Brand slug: "openai", "meta", "anthropic", etc.
@@ -1349,7 +1410,7 @@ interface RunParams {
 
 ```typescript
 interface ProviderAdapter {
-  id: ProviderId                                      // "openrouter" | "groq"
+  id: ProviderId                                      // "openrouter" | "groq" | "cerebras"
   label: string
   keyUrl: string                                      // URL to create a key
   keyPlaceholder: string
@@ -1366,7 +1427,7 @@ interface ProviderAdapter {
 }
 ```
 
-**Implementations:** `openRouterAdapter`, `groqAdapter`  
+**Implementations:** `openRouterAdapter`, `groqAdapter`, `cerebrasAdapter`  
 **Registry:** `ADAPTERS` in `lib/providers/index.ts`
 
 #### CompletionOutcome
@@ -1703,6 +1764,32 @@ Accept: application/json
 }
 ```
 
+#### Cerebras: List Models
+
+```http
+GET /v1/models HTTP/1.1
+Host: api.cerebras.ai
+Authorization: Bearer csk-...
+Accept: application/json
+```
+
+**Response** (OpenAI-compatible list shape; only `id` and `owned_by` are guaranteed present):
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "llama-3.3-70b",
+      "object": "model",
+      "created": 1704067200,
+      "owned_by": "Meta"
+    }
+    // ... more models (no pricing data; context_window presence varies)
+  ]
+}
+```
+
 ---
 
 ## Cross-Feature Interaction Map
@@ -1772,15 +1859,15 @@ graph LR
 
 ## Appendices
 
-### A. Extending RouterDash: Adding a Third Provider
+### A. Extending RouterDash: Adding a Fourth Provider
 
-To add support for a new provider (e.g., Anthropic):
+RouterDash currently supports OpenRouter, Groq, and Cerebras (the third, added as an OpenAI-compatible key-gated adapter mirroring Groq). To add a fourth provider (e.g., Anthropic):
 
 1. **Create** `lib/providers/anthropic.ts`:
    ```typescript
    const anthropicAdapter: ProviderAdapter = {
      id: "anthropic",
-     label: "Anthropic",
+     label: PROVIDER_LABELS.anthropic,
      keyUrl: "https://console.anthropic.com/account/keys",
      keyPlaceholder: "sk-ant-...",
      keyHint: "Starts with sk-ant-...",
@@ -1790,34 +1877,42 @@ To add support for a new provider (e.g., Anthropic):
    }
    export { anthropicAdapter }
    ```
+   Note: Anthropic's native API is *not* OpenAI-compatible, so this adapter could not reuse `openai-compat.ts` the way the Cerebras adapter reused it from Groq — it would need its own request/response shape.
 
 2. **Register in** `lib/providers/index.ts`:
    ```typescript
    const ADAPTERS: Record<ProviderId, ProviderAdapter> = {
      openrouter: openRouterAdapter,
      groq: groqAdapter,
+     cerebras: cerebrasAdapter,
      anthropic: anthropicAdapter,  // NEW
    }
-   export const PROVIDER_ORDER = ["openrouter", "groq", "anthropic"]  // Order matters for UI
+   export const PROVIDER_ORDER = ["openrouter", "groq", "cerebras", "anthropic"]  // Order matters for UI
    ```
 
 3. **Update type** `lib/providers/types.ts`:
    ```typescript
-   export type ProviderId = "openrouter" | "groq" | "anthropic"  // Add here
-   export const PROVIDER_IDS: readonly ProviderId[] = ["openrouter", "groq", "anthropic"]
+   export type ProviderId = "openrouter" | "groq" | "cerebras" | "anthropic"  // Add here
+   export const PROVIDER_IDS: readonly ProviderId[] = ["openrouter", "groq", "cerebras", "anthropic"]
+   export const PROVIDER_LABELS: Record<ProviderId, string> = {
+     openrouter: "OpenRouter", groq: "Groq", cerebras: "Cerebras", anthropic: "Anthropic",  // NEW
+   }
    ```
+   `isProviderId` and `parseModelKey` derive from `PROVIDER_IDS`, so they need no change — this is the fix that landed with Cerebras (previously `parseModelKey` hardcoded `prefix === "openrouter" || prefix === "groq"`, which would have silently misrouted `anthropic:...` keys to OpenRouter).
 
-4. **Update UI state** `app/page.tsx` (storage keys, SWR hooks):
+4. **Add one line to** `hooks/use-catalogs.ts` (React's rules-of-hooks forbid looping `useSWR` over `PROVIDER_ORDER`, so each provider gets an explicit call):
    ```typescript
-   const { data: anthropicModels } = useSWR(
-     apiKeys.anthropic ? ["catalog", "anthropic", apiKeys.anthropic] : null,
-     ([, , key]) => loadCatalog("anthropic", key, {})
+   const anthropic = useProviderCatalog("anthropic", keys.anthropic)
+   const swrByProvider = React.useMemo(
+     () => ({ openrouter, groq, cerebras, anthropic }),  // NEW
+     [openrouter, groq, cerebras, anthropic],
    )
    ```
+   Everything else in that hook (`models`, `providerStates`, `refreshProvider`, `refreshAll`) iterates `PROVIDER_ORDER` generically and needs no change.
 
-5. **Update** `ApiKeyDialog` component to show Anthropic key field.
+5. **`ApiKeyDialog` and `ModelDialog` need no change** — both already iterate `PROVIDER_ORDER` and read `ADAPTERS[p]` metadata, so the new key field, hint link, provider filter toggle, and status row all appear automatically. The one exhaustive `Record<ProviderId, string>` that *will* need a new entry (TypeScript enforces this) is `PROVIDER_TAG_COLORS` in `components/router-dash/provider-badge.tsx` — pick a hue distinct from the existing providers.
 
-6. **Test:** Run the app locally, verify the new provider appears in ModelPicker, and complete a benchmark run.
+6. **Test:** Run the app locally, verify the new provider appears in ModelPicker, and complete a benchmark run. Also add cases to `lib/providers/__tests__/identity.test.ts` for the new `parseModelKey` prefix — that check has no compiler safety net.
 
 ### B. Debugging Tips
 
@@ -1831,7 +1926,7 @@ location.reload()
 
 **Enable verbose logging:** Add `console.log` in `handleRun()`, `postChatCompletion()`, `loadCatalog()` to trace data flow.
 
-**Inspect API calls:** DevTools → Network tab. Look for `openrouter.ai` and `api.groq.com` requests.
+**Inspect API calls:** DevTools → Network tab. Look for `openrouter.ai`, `api.groq.com`, and `api.cerebras.ai` requests.
 
 **Test error handling:** In DevTools, intercept a fetch request and have it return a 401 or 429 to see error redaction in action.
 

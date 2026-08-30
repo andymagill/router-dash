@@ -8,6 +8,7 @@
  */
 
 import type { ProviderId } from "./types"
+import { PROVIDER_LABELS } from "./types"
 
 export type ErrorCategory =
   | "auth"
@@ -24,9 +25,10 @@ const REDACTIONS: { re: RegExp; with: string }[] = [
   // Bearer tokens / Authorization headers
   { re: /\bBearer\s+[A-Za-z0-9._\-]+/gi, with: "Bearer [redacted]" },
   { re: /\bauthorization["'`:=\s]+[^\s"'`,}]+/gi, with: "authorization: [redacted]" },
-  // Common API key shapes (OpenRouter sk-or-, OpenAI sk-, Groq gsk_)
+  // Common API key shapes (OpenRouter sk-or-, OpenAI sk-, Groq gsk_, Cerebras csk-)
   { re: /\bsk-or-[A-Za-z0-9._\-]+/gi, with: "[redacted-key]" },
   { re: /\bgsk_[A-Za-z0-9]+/gi, with: "[redacted-key]" },
+  { re: /\bcsk-[A-Za-z0-9._\-]+/gi, with: "[redacted-key]" },
   { re: /\bsk-[A-Za-z0-9]{12,}/gi, with: "[redacted-key]" },
   // api_key / apiKey / token fields in JSON-ish text
   { re: /("?(?:api[_-]?key|token|secret|password)"?\s*[:=]\s*)("?[^\s"',}]+"?)/gi, with: "$1[redacted]" },
@@ -66,7 +68,7 @@ export function summaryForCategory(
   category: ErrorCategory,
   provider: ProviderId,
 ): string {
-  const name = provider === "groq" ? "Groq" : "OpenRouter"
+  const name = PROVIDER_LABELS[provider]
   switch (category) {
     case "auth":
       return `${name} rejected the API key (check it in Keys)`

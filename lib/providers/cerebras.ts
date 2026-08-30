@@ -1,10 +1,10 @@
 /**
- * Groq provider adapter.
+ * Cerebras provider adapter.
  *
- * Groq's live `/openai/v1/models` endpoint is the source of truth for active
- * model IDs and requires the user's key. Its metadata is sparser than
- * OpenRouter's, so we normalize only what is actually present and never
- * fabricate pricing, free-tier, or modality information.
+ * Cerebras' `/v1/models` endpoint is OpenAI-compatible and requires the
+ * user's key, mirroring Groq. Its metadata is sparse (no pricing, no
+ * guaranteed context length), so we normalize only what is actually present
+ * and never fabricate pricing, free-tier, or modality information.
  */
 
 import type {
@@ -18,38 +18,35 @@ import { isChatCompatibleId, vendorSlugFromOwner } from "./compat"
 import { postChatCompletion } from "./openai-compat"
 import { providerErrorFromResponse, providerErrorFromThrown } from "./errors"
 
-export const GROQ_BASE = "https://api.groq.com/openai/v1"
+export const CEREBRAS_BASE = "https://api.cerebras.ai/v1"
 
-// --- Raw Groq catalog shape -------------------------------------------------
+// --- Raw Cerebras catalog shape ---------------------------------------------
 
-export interface GroqModel {
+export interface CerebrasModel {
   id: string
   object?: string
   created?: number
   owned_by?: string
-  active?: boolean
   context_window?: number
-  max_completion_tokens?: number
 }
 
-function isCompatible(model: GroqModel): boolean {
-  if (model.active === false) return false
+function isCompatible(model: CerebrasModel): boolean {
   return isChatCompatibleId(model.id)
 }
 
-export function normalizeGroqModel(model: GroqModel): UnifiedModel {
+export function normalizeCerebrasModel(model: CerebrasModel): UnifiedModel {
   const contextLength = model.context_window
   return {
-    key: makeModelKey("groq", model.id),
-    provider: "groq",
+    key: makeModelKey("cerebras", model.id),
+    provider: "cerebras",
     modelId: model.id,
-    // Groq provides no separate display name; the ID is the canonical label.
+    // Cerebras provides no separate display name; the ID is the canonical label.
     name: model.id,
     vendor: vendorSlugFromOwner(model.owned_by),
     owner: model.owned_by,
     contextLength: contextLength ?? undefined,
     contextKnown: contextLength != null,
-    // Groq's catalog carries no pricing; never claim free or a price.
+    // Cerebras' catalog carries no pricing; never claim free or a price.
     promptPrice: undefined,
     completionPrice: undefined,
     pricingKnown: false,
@@ -66,14 +63,14 @@ async function fetchCatalog(
 ): Promise<UnifiedModel[]> {
   if (!apiKey.trim()) {
     throw providerErrorFromResponse({
-      provider: "groq",
+      provider: "cerebras",
       status: 401,
-      rawMessage: "Missing Groq API key",
+      rawMessage: "Missing Cerebras API key",
     })
   }
   let res: Response
   try {
-    res = await fetch(`${GROQ_BASE}/models`, {
+    res = await fetch(`${CEREBRAS_BASE}/models`, {
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${apiKey}`,
@@ -82,19 +79,19 @@ async function fetchCatalog(
     })
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err
-    throw providerErrorFromThrown("groq", err)
+    throw providerErrorFromThrown("cerebras", err)
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "")
     throw providerErrorFromResponse({
-      provider: "groq",
+      provider: "cerebras",
       status: res.status,
       rawMessage: text,
     })
   }
   const json = await res.json()
-  const data: GroqModel[] = json?.data ?? []
-  return data.filter(isCompatible).map(normalizeGroqModel)
+  const data: CerebrasModel[] = json?.data ?? []
+  return data.filter(isCompatible).map(normalizeCerebrasModel)
 }
 
 async function runCompletion(
@@ -110,8 +107,8 @@ async function runCompletion(
   }
   messages.push({ role: "user" as const, content: prompt })
 
-  // Keep the payload conservative and portable. Groq accepts the standard
-  // temperature/top_p and uses max_completion_tokens.
+  // Keep the payload conservative and portable. Cerebras accepts the standard
+  // temperature/top_p and uses max_completion_tokens (like Groq).
   const body: Record<string, unknown> = {
     max_completion_tokens: params.maxTokens,
     temperature: params.temperature,
@@ -119,8 +116,8 @@ async function runCompletion(
   }
 
   return postChatCompletion({
-    provider: "groq",
-    url: `${GROQ_BASE}/chat/completions`,
+    provider: "cerebras",
+    url: `${CEREBRAS_BASE}/chat/completions`,
     apiKey,
     model: model.modelId,
     messages,
@@ -129,12 +126,12 @@ async function runCompletion(
   })
 }
 
-export const groqAdapter: ProviderAdapter = {
-  id: "groq",
-  label: PROVIDER_LABELS.groq,
-  keyUrl: "https://console.groq.com/keys",
-  keyPlaceholder: "gsk_...",
-  keyHint: "Starts with gsk_. Required to browse and run Groq models.",
+export const cerebrasAdapter: ProviderAdapter = {
+  id: "cerebras",
+  label: PROVIDER_LABELS.cerebras,
+  keyUrl: "https://cloud.cerebras.ai/",
+  keyPlaceholder: "csk-...",
+  keyHint: "Starts with csk-. Required to browse and run Cerebras models.",
   requiresKeyForCatalog: true,
   fetchCatalog,
   runCompletion,

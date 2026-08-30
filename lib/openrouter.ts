@@ -34,6 +34,7 @@ export function providerLabel(slug: string): string {
     amazon: "Amazon",
     moonshotai: "Moonshot",
     groq: "Groq",
+    cerebras: "Cerebras",
   }
   return map[slug] ?? slug.charAt(0).toUpperCase() + slug.slice(1)
 }

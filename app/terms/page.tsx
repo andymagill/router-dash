@@ -35,7 +35,7 @@ export default function TermsPage() {
         <div>
           <h2 className="text-lg font-semibold mb-3">2. Data & Privacy</h2>
           <p className="text-muted-foreground mb-2">
-            Your API keys are stored <strong>only in this browser&apos;s localStorage</strong> and are sent directly to the respective LLM providers (OpenRouter, etc.). They are never transmitted to or stored on our servers, and are never included in saved, shared, or exported benchmarks.
+            Your API keys are stored <strong>only in this browser&apos;s localStorage</strong> and are sent directly to the respective LLM providers (OpenRouter, Groq, Cerebras, etc.). They are never transmitted to or stored on our servers, and are never included in saved, shared, or exported benchmarks.
           </p>
           <p className="text-muted-foreground mb-2">
             Prompts and benchmark results may be stored locally in your browser and, if you choose to share or export them, those actions are under your control. We do not collect or retain this data on our servers.

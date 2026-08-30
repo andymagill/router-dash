@@ -1,17 +1,35 @@
 /**
  * Provider-agnostic core types and identity helpers.
  *
- * RouterDash treats OpenRouter and Groq as first-class providers. A model is
- * identified by a stable composite key `${provider}:${modelId}` so the same
- * base model ID coming from two different providers never collides.
+ * RouterDash treats OpenRouter, Groq, and Cerebras as first-class providers. A
+ * model is identified by a stable composite key `${provider}:${modelId}` so
+ * the same base model ID coming from two different providers never collides.
  */
 
-export type ProviderId = "openrouter" | "groq"
+export type ProviderId = "openrouter" | "groq" | "cerebras"
 
-export const PROVIDER_IDS: readonly ProviderId[] = ["openrouter", "groq"]
+export const PROVIDER_IDS: readonly ProviderId[] = [
+  "openrouter",
+  "groq",
+  "cerebras",
+]
 
 export function isProviderId(value: unknown): value is ProviderId {
-  return value === "openrouter" || value === "groq"
+  return (
+    typeof value === "string" &&
+    (PROVIDER_IDS as readonly string[]).includes(value)
+  )
+}
+
+/**
+ * Display names shared across the adapters, error summaries, and other code
+ * that cannot import `ADAPTERS` from "./index" (an import cycle: index ->
+ * openrouter/groq/cerebras -> errors -> index).
+ */
+export const PROVIDER_LABELS: Record<ProviderId, string> = {
+  openrouter: "OpenRouter",
+  groq: "Groq",
+  cerebras: "Cerebras",
 }
 
 // ---------------------------------------------------------------------------
@@ -119,7 +137,7 @@ export function makeModelKey(provider: ProviderId, modelId: string): string {
 /**
  * Parse a composite key into provider + native model ID. A key without a known
  * provider prefix is treated as a legacy OpenRouter id (backwards compat with
- * benchmarks saved before Groq support existed).
+ * benchmarks saved before Groq/Cerebras support existed).
  */
 export function parseModelKey(key: string): {
   provider: ProviderId
@@ -128,7 +146,7 @@ export function parseModelKey(key: string): {
   const idx = key.indexOf(":")
   if (idx > 0) {
     const prefix = key.slice(0, idx)
-    if (prefix === "openrouter" || prefix === "groq") {
+    if (isProviderId(prefix)) {
       return { provider: prefix, modelId: key.slice(idx + 1) }
     }
   }
