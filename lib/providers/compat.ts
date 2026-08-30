@@ -47,6 +47,7 @@ const OWNER_TO_SLUG: Record<string, string> = {
   groq: "groq",
   "sdaia": "sdaia",
   moonshotai: "moonshotai",
+  cerebras: "cerebras",
 }
 
 /** Normalize a provider-reported owner into a monogram vendor slug. */

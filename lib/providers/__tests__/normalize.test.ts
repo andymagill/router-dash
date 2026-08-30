@@ -5,6 +5,10 @@ import {
 } from "@/lib/providers/openrouter"
 import { normalizeGroqModel, type GroqModel } from "@/lib/providers/groq"
 import {
+  normalizeCerebrasModel,
+  type CerebrasModel,
+} from "@/lib/providers/cerebras"
+import {
   isChatCompatibleId,
   vendorSlugFromOwner,
   vendorSlugFromId,
@@ -69,6 +73,33 @@ describe("Groq normalization", () => {
 
   it("reports unknown context when the window is missing", () => {
     const m = normalizeGroqModel({ id: "some-model" })
+    expect(m.contextKnown).toBe(false)
+    expect(m.contextLength).toBeUndefined()
+  })
+})
+
+describe("Cerebras normalization", () => {
+  it("normalizes an active model without fabricating pricing", () => {
+    const raw: CerebrasModel = {
+      id: "llama-3.3-70b",
+      owned_by: "Meta",
+      context_window: 65_536,
+    }
+    const m = normalizeCerebrasModel(raw)
+    expect(m.key).toBe("cerebras:llama-3.3-70b")
+    expect(m.provider).toBe("cerebras")
+    expect(m.vendor).toBe("meta")
+    expect(m.contextKnown).toBe(true)
+    expect(m.contextLength).toBe(65_536)
+    // Cerebras exposes no pricing/free/modality metadata — we must not invent it.
+    expect(m.pricingKnown).toBe(false)
+    expect(m.isFree).toBe(false)
+    expect(m.promptPrice).toBeUndefined()
+    expect(m.inputModalities).toBeUndefined()
+  })
+
+  it("reports unknown context when the window is missing", () => {
+    const m = normalizeCerebrasModel({ id: "some-model" })
     expect(m.contextKnown).toBe(false)
     expect(m.contextLength).toBeUndefined()
   })

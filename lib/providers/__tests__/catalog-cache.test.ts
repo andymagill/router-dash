@@ -68,8 +68,25 @@ describe("catalog TTL cache", () => {
     const now = 5_000
     writeCatalogCache("groq", sample, { now, storage })
     expect(readCatalogCache("openrouter", { now, storage })).toBeNull()
+    expect(readCatalogCache("cerebras", { now, storage })).toBeNull()
     clearCatalogCache("groq", { storage })
     expect(readCatalogCache("groq", { now, storage })).toBeNull()
+  })
+
+  it("namespaces the Cerebras cache separately from Groq and OpenRouter", () => {
+    const storage = makeStorage()
+    const now = 5_000
+    const cerebrasSample: UnifiedModel[] = [
+      { ...sample[0], key: "cerebras:llama-3.3-70b", provider: "cerebras", modelId: "llama-3.3-70b" },
+    ]
+    writeCatalogCache("cerebras", cerebrasSample, { now, storage })
+    writeCatalogCache("groq", sample, { now, storage })
+    expect(readCatalogCache("cerebras", { now, storage })?.[0].key).toBe(
+      "cerebras:llama-3.3-70b",
+    )
+    expect(readCatalogCache("groq", { now, storage })?.[0].key).toBe(
+      "groq:llama-3.3-70b-versatile",
+    )
   })
 
   it("ignores corrupt cache payloads", () => {

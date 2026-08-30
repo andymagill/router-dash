@@ -161,8 +161,8 @@ export function ApiKeyDialog({
               >
                 <CheckCircle2Icon data-icon="inline-start" />
                 {connectedCount === PROVIDER_ORDER.length
-                  ? "Both keys"
-                  : `${connectedCount} key`}
+                  ? "All keys"
+                  : `${connectedCount} key${connectedCount === 1 ? "" : "s"}`}
               </Badge>
             ) : (
               <Badge

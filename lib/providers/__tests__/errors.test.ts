@@ -26,6 +26,12 @@ describe("error sanitization", () => {
     expect(out).not.toContain("secret-value-here")
   })
 
+  it("redacts Cerebras csk- keys", () => {
+    expect(sanitizeErrorText("key csk-ABC123def456")).not.toContain(
+      "csk-ABC123def456",
+    )
+  })
+
   it("strips absolute file paths and stack traces", () => {
     const raw =
       "Error: boom\n    at fetchCatalog (/var/task/lib/providers/groq.ts:42:11)"
@@ -75,5 +81,17 @@ describe("ProviderError construction", () => {
     )
     expect(err.category).toBe("network")
     expect(err.message).toContain("OpenRouter")
+  })
+
+  it("labels Cerebras errors as Cerebras, not OpenRouter", () => {
+    const err = providerErrorFromResponse({
+      provider: "cerebras",
+      status: 401,
+      rawMessage: "Invalid API Key: csk-supersecretvalue",
+    })
+    expect(err.message).toContain("Cerebras")
+    expect(err.message).not.toContain("OpenRouter")
+    expect(err.message).not.toContain("csk-supersecretvalue")
+    expect(err.detail).not.toContain("csk-supersecretvalue")
   })
 })

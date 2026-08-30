@@ -66,9 +66,26 @@ describe("composite model identity", () => {
     )
   })
 
+  it("does not collide across all three providers for the same base id", () => {
+    const keys = new Set([
+      makeModelKey("openrouter", "llama-3.3-70b"),
+      makeModelKey("groq", "llama-3.3-70b"),
+      makeModelKey("cerebras", "llama-3.3-70b"),
+    ])
+    expect(keys.size).toBe(3)
+  })
+
+  it("parses a cerebras-prefixed key (regression: must not fall back to openrouter)", () => {
+    expect(parseModelKey("cerebras:llama-3.3-70b")).toEqual({
+      provider: "cerebras",
+      modelId: "llama-3.3-70b",
+    })
+  })
+
   it("guards provider ids", () => {
     expect(isProviderId("groq")).toBe(true)
     expect(isProviderId("openrouter")).toBe(true)
+    expect(isProviderId("cerebras")).toBe(true)
     expect(isProviderId("azure")).toBe(false)
   })
 })

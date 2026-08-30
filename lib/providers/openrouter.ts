@@ -12,7 +12,7 @@ import type {
   RunParams,
   UnifiedModel,
 } from "./types"
-import { makeModelKey, supportsParam } from "./types"
+import { makeModelKey, PROVIDER_LABELS, supportsParam } from "./types"
 import { isChatCompatibleId, vendorSlugFromId } from "./compat"
 import { postChatCompletion } from "./openai-compat"
 import { providerErrorFromResponse, providerErrorFromThrown } from "./errors"
@@ -152,7 +152,7 @@ async function runCompletion(
 
 export const openRouterAdapter: ProviderAdapter = {
   id: "openrouter",
-  label: "OpenRouter",
+  label: PROVIDER_LABELS.openrouter,
   keyUrl: "https://openrouter.ai/keys",
   keyPlaceholder: "sk-or-v1-...",
   keyHint: "Starts with sk-or-. Catalog browsing works without a key.",

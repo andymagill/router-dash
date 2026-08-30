@@ -24,6 +24,7 @@ graph TB
         Registry["Registry (index.ts)<br/>getAdapter(),<br/>loadCatalog()"]
         OpenRouter["OpenRouter Adapter<br/>(openrouter.ts)"]
         Groq["Groq Adapter<br/>(groq.ts)"]
+        Cerebras["Cerebras Adapter<br/>(cerebras.ts)"]
         OpenAICompat["Shared HTTP Dispatch<br/>(openai-compat.ts)"]
         ErrorHandling["Error Sanitization<br/>(errors.ts)"]
         CatalogCache["Catalog Cache<br/>(catalog-cache.ts)"]
@@ -37,6 +38,7 @@ graph TB
     subgraph External["External APIs"]
         OpenRouterAPI["OpenRouter API<br/>https://openrouter.ai/api/v1"]
         GroqAPI["Groq API<br/>https://api.groq.com/openai/v1"]
+        CerebrasAPI["Cerebras API<br/>https://api.cerebras.ai/v1"]
     end
 
     subgraph CrossCutting["Cross-Cutting Concerns"]
@@ -61,10 +63,13 @@ graph TB
     Registry -->|cache| CatalogCache
     Registry -->|dispatch| OpenRouter
     Registry -->|dispatch| Groq
+    Registry -->|dispatch| Cerebras
     OpenRouter -->|send request| OpenAICompat
     Groq -->|send request| OpenAICompat
+    Cerebras -->|send request| OpenAICompat
     OpenAICompat -->|http| OpenRouterAPI
     OpenAICompat -->|http| GroqAPI
+    OpenAICompat -->|http| CerebrasAPI
     OpenAICompat -->|sanitize errors| ErrorHandling
     HandleRun -->|store results| AppState
     AppState -->|persist| LocalStorage

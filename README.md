@@ -1,6 +1,6 @@
 # RouterDash
 
-A high-density developer playground to test and compare LLM models side by side via the OpenRouter API. Parallel execution, latency, token, and cost metrics.
+A high-density developer playground to test and compare LLM models side by side across OpenRouter, Groq, and Cerebras. Parallel execution, latency, token, and cost metrics.
 
 ## Getting Started
 

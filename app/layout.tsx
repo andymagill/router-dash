@@ -24,7 +24,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
 
 const title = 'RouterDash — LLM Benchmark Playground'
 const description =
-  'A high-density developer playground to test and compare LLM models side by side via the OpenRouter API. Parallel execution, latency, token, and cost metrics.'
+  'A high-density developer playground to test and compare LLM models side by side across OpenRouter, Groq, and Cerebras. Parallel execution, latency, token, and cost metrics.'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

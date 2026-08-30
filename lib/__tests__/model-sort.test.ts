@@ -139,14 +139,16 @@ describe("sortModels", () => {
     const models = [
       model({ modelId: "g", provider: "groq" }),
       model({ modelId: "o", provider: "openrouter" }),
+      model({ modelId: "c", provider: "cerebras" }),
     ]
-    // Alphabetically "groq" precedes "openrouter"; PROVIDER_ORDER is the reverse.
+    // Alphabetically it'd be cerebras, groq, openrouter; PROVIDER_ORDER is
+    // openrouter, groq, cerebras.
     expect(
       sortModels(models, "provider", "asc").map((m) => m.provider),
-    ).toEqual(["openrouter", "groq"])
+    ).toEqual(["openrouter", "groq", "cerebras"])
     expect(
       sortModels(models, "provider", "desc").map((m) => m.provider),
-    ).toEqual(["groq", "openrouter"])
+    ).toEqual(["cerebras", "groq", "openrouter"])
   })
 })
 
@@ -169,18 +171,28 @@ describe("filterModels", () => {
       vendor: "meta",
       contextLength: 4_000,
     }),
+    model({
+      modelId: "llama-3.3-70b",
+      name: "Llama 3.3 70B (Cerebras)",
+      provider: "cerebras",
+      vendor: "meta",
+      contextLength: 65_536,
+    }),
   ]
   const noFilters: ModelFilters = { search: "", providers: [], meta: [] }
 
   it("returns everything when no filters are set", () => {
-    expect(filterModels(catalog, { ...noFilters })).toHaveLength(3)
+    expect(filterModels(catalog, { ...noFilters })).toHaveLength(4)
   })
 
   it("treats an empty providers array as all providers", () => {
-    expect(filterModels(catalog, { ...noFilters, providers: [] })).toHaveLength(3)
+    expect(filterModels(catalog, { ...noFilters, providers: [] })).toHaveLength(4)
     expect(
       filterModels(catalog, { ...noFilters, providers: ["groq"] }).map((m) => m.name),
     ).toEqual(["Llama 3.1 8B"])
+    expect(
+      filterModels(catalog, { ...noFilters, providers: ["cerebras"] }).map((m) => m.name),
+    ).toEqual(["Llama 3.3 70B (Cerebras)"])
   })
 
   it("filters to free models only", () => {
@@ -214,9 +226,14 @@ describe("filterModels", () => {
       filterModels(catalog, { ...noFilters, search: q }).map((m) => m.name)
 
     expect(search("gpt-4o")).toEqual(["GPT-4o"]) // modelId
-    expect(search("llama 3.3")).toEqual(["Llama 3.3 70B"]) // name
-    expect(search("meta")).toEqual(["Llama 3.3 70B", "Llama 3.1 8B"]) // vendor
+    expect(search("meta-llama/llama-3.3-70b")).toEqual(["Llama 3.3 70B"]) // modelId
+    expect(search("meta")).toEqual([
+      "Llama 3.3 70B",
+      "Llama 3.1 8B",
+      "Llama 3.3 70B (Cerebras)",
+    ]) // vendor
     expect(search("groq")).toEqual(["Llama 3.1 8B"]) // adapter label
+    expect(search("cerebras")).toEqual(["Llama 3.3 70B (Cerebras)"]) // adapter label
   })
 
   it("searches case-insensitively and ignores surrounding whitespace", () => {

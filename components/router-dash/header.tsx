@@ -31,7 +31,7 @@ export function Header({
               RouterDash
             </span>
             <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">
-              / openrouter playground
+              / llm playground
             </span>
           </div>
         </div>

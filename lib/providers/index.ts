@@ -6,6 +6,7 @@
 import type { ProviderId, ProviderAdapter, UnifiedModel } from "./types"
 import { openRouterAdapter } from "./openrouter"
 import { groqAdapter } from "./groq"
+import { cerebrasAdapter } from "./cerebras"
 import {
   CATALOG_TTL_MS,
   readCatalogCache,
@@ -17,6 +18,7 @@ export * from "./types"
 export * from "./errors"
 export { openRouterAdapter } from "./openrouter"
 export { groqAdapter } from "./groq"
+export { cerebrasAdapter } from "./cerebras"
 export {
   CATALOG_TTL_MS,
   readCatalogCache,
@@ -30,6 +32,7 @@ export { isChatCompatibleId, vendorSlugFromId, vendorSlugFromOwner } from "./com
 export const ADAPTERS: Record<ProviderId, ProviderAdapter> = {
   openrouter: openRouterAdapter,
   groq: groqAdapter,
+  cerebras: cerebrasAdapter,
 }
 
 export function getAdapter(provider: ProviderId): ProviderAdapter {
@@ -37,7 +40,7 @@ export function getAdapter(provider: ProviderId): ProviderAdapter {
 }
 
 /** Providers in stable display order. */
-export const PROVIDER_ORDER: ProviderId[] = ["openrouter", "groq"]
+export const PROVIDER_ORDER: ProviderId[] = ["openrouter", "groq", "cerebras"]
 
 /**
  * Load a provider's catalog, using the fresh local cache when available.
