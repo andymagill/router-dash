@@ -133,7 +133,13 @@ export type DecodeResult =
   | { ok: true; payload: SharePayload }
   | { ok: false; reason: string }
 
-const VALID_STATUSES: RunStatus[] = ["idle", "running", "done", "error"]
+const VALID_STATUSES: RunStatus[] = [
+  "idle",
+  "running",
+  "done",
+  "error",
+  "skipped",
+]
 
 function isRunParams(v: unknown): v is RunParams {
   if (typeof v !== "object" || v === null) return false

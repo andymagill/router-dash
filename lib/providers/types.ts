@@ -42,9 +42,25 @@ export interface ORUsage {
   total_tokens: number
 }
 
+/** OpenAI-compatible content-part shapes for multimodal user messages. */
+export interface ContentPart {
+  type: "text" | "image_url"
+  text?: string
+  image_url?: { url: string }
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant"
-  content: string
+  content: string | ContentPart[]
+}
+
+/** An image attached to a prompt, encoded as a base64 data URL. */
+export interface PromptImage {
+  id: string
+  dataUrl: string
+  mimeType: string
+  name: string
+  sizeBytes: number
 }
 
 /** Generation parameters applied to every model in a run. */
@@ -120,6 +136,7 @@ export interface ProviderAdapter {
     apiKey: string,
     model: UnifiedModel,
     prompt: string,
+    images: PromptImage[],
     params: RunParams,
     signal?: AbortSignal,
   ): Promise<CompletionOutcome>
@@ -172,6 +189,19 @@ export function supportsParam(model: UnifiedModel, param: string): boolean {
     return true
   }
   return model.supportedParameters.includes(param)
+}
+
+/**
+ * Whether a model is known to accept image input. Only OpenRouter's catalog
+ * exposes `inputModalities` today; when it's absent (Groq, Cerebras) we assume
+ * support rather than fabricate a "no vision" claim — the request either
+ * succeeds or fails on its own, isolated from the rest of the run. This only
+ * returns `false` when we have positive evidence (a reported modality list
+ * that excludes "image").
+ */
+export function supportsVision(model: UnifiedModel): boolean {
+  if (!model.inputModalities || model.inputModalities.length === 0) return true
+  return model.inputModalities.includes("image")
 }
 
 export const LONG_CONTEXT_THRESHOLD = 128_000

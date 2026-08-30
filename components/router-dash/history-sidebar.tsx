@@ -13,6 +13,7 @@ import {
   FileJsonIcon,
   FileSpreadsheetIcon,
   TriangleAlertIcon,
+  ImageIcon,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -152,6 +153,15 @@ function HistoryCard({
             {entry.modelIds.length} model
             {entry.modelIds.length === 1 ? "" : "s"}
           </Badge>
+          {entry.images && entry.images.length > 0 && (
+            <Badge
+              variant="secondary"
+              className="h-4 gap-0.5 px-1 font-mono text-[9px]"
+            >
+              <ImageIcon className="size-2.5" />
+              {entry.images.length}
+            </Badge>
+          )}
           {errored > 0 ? (
             <span className="font-mono text-[9px] text-destructive">
               {errored} failed

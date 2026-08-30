@@ -9,12 +9,13 @@
 import type {
   CompletionOutcome,
   ProviderAdapter,
+  PromptImage,
   RunParams,
   UnifiedModel,
 } from "./types"
 import { makeModelKey, PROVIDER_LABELS, supportsParam } from "./types"
 import { isChatCompatibleId, vendorSlugFromId } from "./compat"
-import { postChatCompletion } from "./openai-compat"
+import { buildUserContent, postChatCompletion } from "./openai-compat"
 import { providerErrorFromResponse, providerErrorFromThrown } from "./errors"
 
 export const OPENROUTER_BASE = "https://openrouter.ai/api/v1"
@@ -121,6 +122,7 @@ async function runCompletion(
   apiKey: string,
   model: UnifiedModel,
   prompt: string,
+  images: PromptImage[],
   params: RunParams,
   signal?: AbortSignal,
 ): Promise<CompletionOutcome> {
@@ -128,7 +130,10 @@ async function runCompletion(
   if (params.systemPrompt.trim()) {
     messages.push({ role: "system" as const, content: params.systemPrompt })
   }
-  messages.push({ role: "user" as const, content: prompt })
+  messages.push({
+    role: "user" as const,
+    content: buildUserContent(prompt, images),
+  })
 
   const body: Record<string, unknown> = { max_tokens: params.maxTokens }
   if (supportsParam(model, "temperature")) body.temperature = params.temperature

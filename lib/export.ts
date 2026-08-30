@@ -35,6 +35,7 @@ function stripEntry(entry: HistoryEntry): HistoryEntry {
     id: entry.id,
     createdAt: entry.createdAt,
     prompt: entry.prompt,
+    images: entry.images,
     params: entry.params,
     modelIds: entry.modelIds,
     results: entry.results.map((r) => ({
@@ -72,6 +73,7 @@ export function escapeCsvField(value: string | number): string {
 const CSV_COLUMNS = [
   "timestamp",
   "prompt",
+  "image_count",
   "models",
   "model_count",
   "elapsed_ms",
@@ -103,6 +105,7 @@ export function buildCsvExport(entries: HistoryEntry[]): string {
     const row = [
       new Date(entry.createdAt).toISOString(),
       entry.prompt,
+      entry.images?.length ?? 0,
       entry.modelIds.join(" | "),
       entry.modelIds.length,
       Math.round(entry.elapsedMs),
@@ -131,7 +134,13 @@ export type ImportResult =
     }
   | { ok: false; reason: string }
 
-const VALID_STATUSES: RunStatus[] = ["idle", "running", "done", "error"]
+const VALID_STATUSES: RunStatus[] = [
+  "idle",
+  "running",
+  "done",
+  "error",
+  "skipped",
+]
 
 function isRunParams(v: unknown): v is RunParams {
   if (typeof v !== "object" || v === null) return false
@@ -163,6 +172,22 @@ function isRunState(v: unknown): v is RunState {
   )
 }
 
+function isPromptImageArray(v: unknown): boolean {
+  if (v === undefined) return true
+  if (!Array.isArray(v)) return false
+  return v.every((img) => {
+    if (typeof img !== "object" || img === null) return false
+    const i = img as Record<string, unknown>
+    return (
+      typeof i.id === "string" &&
+      typeof i.dataUrl === "string" &&
+      typeof i.mimeType === "string" &&
+      typeof i.name === "string" &&
+      typeof i.sizeBytes === "number"
+    )
+  })
+}
+
 export function isHistoryEntry(v: unknown): v is HistoryEntry {
   if (typeof v !== "object" || v === null) return false
   const e = v as Record<string, unknown>
@@ -170,6 +195,7 @@ export function isHistoryEntry(v: unknown): v is HistoryEntry {
     typeof e.id === "string" &&
     typeof e.createdAt === "number" &&
     typeof e.prompt === "string" &&
+    isPromptImageArray(e.images) &&
     isRunParams(e.params) &&
     Array.isArray(e.modelIds) &&
     e.modelIds.every((m) => typeof m === "string") &&
