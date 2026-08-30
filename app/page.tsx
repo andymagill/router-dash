@@ -778,9 +778,8 @@ export default function Page() {
               <div className="flex items-center gap-2">
                 <LayersIcon className="size-4 text-primary" />
                 <h1 className="text-sm font-semibold">
-                  {panelCollapsed
-                    ? `${selectedKeys.length} model${selectedKeys.length === 1 ? "" : "s"} selected`
-                    : `Compare up to ${MAX_MODELS} models across OpenRouter and Groq`}
+                  {selectedKeys.length} model
+                  {selectedKeys.length === 1 ? "" : "s"} selected
                 </h1>
               </div>
               <div className="flex items-center gap-1.5">
@@ -835,13 +834,6 @@ export default function Page() {
                 selectedKeys={selectedKeys}
                 onChange={setSelectedKeys}
                 onRefresh={refreshProvider}
-                onOpenKeys={() => {
-                  document
-                    .querySelector<HTMLButtonElement>(
-                      "[data-api-key-trigger]",
-                    )
-                    ?.click()
-                }}
               />
             )}
           </section>
