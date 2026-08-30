@@ -78,7 +78,7 @@ User can share link (SharePayload) or export (ExportEnvelope)
 - **Data Fetching:** SWR (with localStorage caching layer)
 - **Compression:** lz-string (for URL share links)
 - **Testing:** Vitest 4.1.10 (node environment, no E2E tests)
-- **Deployment:** Vercel (v0.app auto-deploy on main branch)
+- **Deployment:** Vercel (auto-deploy on main branch)
 
 ### Directory Structure
 
@@ -150,7 +150,7 @@ router-dash/
 ├── components.json              # shadcn/ui config
 ├── package.json                 # Scripts: dev, build, start, lint, test
 ├── pnpm-lock.yaml               # Locked dependencies
-└── README.md                    # Generic v0.app boilerplate (auto-deploys on main)
+└── README.md                    # Project README (auto-deploys on main)
 ```
 
 ### Key Build Scripts
