@@ -46,10 +46,21 @@ export function formatRelativeTime(ts: number): string {
   })
 }
 
+/**
+ * True when a per-token price string is a real, fixed number. OpenRouter
+ * reports "-1" for models priced at runtime (its auto-routers), which is a
+ * sentinel rather than a price — never format or compare it as one.
+ */
+export function hasFixedPrice(perToken: string | undefined): boolean {
+  if (perToken === undefined || perToken === "") return false
+  const v = Number(perToken)
+  return !Number.isNaN(v) && v >= 0
+}
+
 /** Per-million-token price label from OpenRouter per-token pricing string. */
 export function pricePerMillion(perToken: string | undefined): string {
+  if (!hasFixedPrice(perToken)) return "—"
   const v = Number(perToken)
-  if (!perToken || Number.isNaN(v)) return "—"
   if (v === 0) return "Free"
   return `$${(v * 1_000_000).toFixed(2)}`
 }
