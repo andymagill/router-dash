@@ -14,7 +14,7 @@ import {
   isLongContext,
 } from "@/lib/providers"
 
-export type MetaFilter = "free" | "long"
+export type MetaFilter = "free" | "long" | "vision"
 
 export type SortColumn =
   | "name"
@@ -44,6 +44,8 @@ export function filterModels(
     if (providers.length > 0 && !providers.includes(m.provider)) return false
     if (meta.includes("free") && !m.isFree) return false
     if (meta.includes("long") && !isLongContext(m)) return false
+    if (meta.includes("vision") && !m.inputModalities?.includes("image"))
+      return false
     if (!q) return true
     const hay =
       `${m.modelId} ${m.name} ${m.owner ?? ""} ${m.vendor} ${ADAPTERS[m.provider].label}`.toLowerCase()

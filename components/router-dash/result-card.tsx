@@ -7,6 +7,7 @@ import {
   TriangleAlertIcon,
   CopyIcon,
   CheckIcon,
+  ImageOffIcon,
 } from "lucide-react"
 import * as React from "react"
 
@@ -51,6 +52,11 @@ function StatusPill({ status }: { status: RunStatus }) {
       label: "Error",
       className: "bg-destructive/15 text-destructive",
       icon: TriangleAlertIcon,
+    },
+    skipped: {
+      label: "Skipped",
+      className: "bg-[color:var(--warn)]/15 text-[color:var(--warn)]",
+      icon: ImageOffIcon,
     },
   }
   const s = map[status]
@@ -180,6 +186,17 @@ export function ResultCard({
             </span>
             <span className="font-mono text-[12px] break-words opacity-90">
               {run?.error ?? "Unknown error"}
+            </span>
+          </div>
+        )}
+        {status === "skipped" && (
+          <div className="flex flex-col gap-1.5 rounded-lg border border-[color:var(--warn)]/30 bg-[color:var(--warn)]/10 p-3 text-[13px] text-[color:var(--warn)]">
+            <span className="flex items-center gap-1.5 font-medium">
+              <ImageOffIcon className="size-3.5" />
+              Not run
+            </span>
+            <span className="text-[12px] break-words opacity-90">
+              {run?.error ?? "This model does not support image input"}
             </span>
           </div>
         )}

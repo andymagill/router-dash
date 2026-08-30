@@ -8,6 +8,7 @@ import {
   ChevronUpIcon,
   GaugeIcon,
   GiftIcon,
+  ImageIcon,
   RefreshCwIcon,
   SearchIcon,
   TriangleAlertIcon,
@@ -333,6 +334,15 @@ export function ModelDialog({
                     <GaugeIcon data-icon="inline-start" />
                     {LONG_CONTEXT_LABEL}
                   </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="vision"
+                    variant="outline"
+                    size="sm"
+                    className="data-pressed:border-primary/40 data-pressed:bg-primary/10 data-pressed:text-primary"
+                  >
+                    <ImageIcon data-icon="inline-start" />
+                    Vision
+                  </ToggleGroupItem>
                 </ToggleGroup>
               </div>
             </div>
@@ -502,6 +512,15 @@ export function ModelDialog({
                                   className="h-4 px-1 text-[9px] uppercase"
                                 >
                                   Preview
+                                </Badge>
+                              )}
+                              {m.inputModalities?.includes("image") && (
+                                <Badge
+                                  variant="outline"
+                                  className="h-4 gap-0.5 px-1 text-[9px] uppercase"
+                                >
+                                  <ImageIcon className="size-2.5" />
+                                  Vision
                                 </Badge>
                               )}
                             </span>

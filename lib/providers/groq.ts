@@ -10,12 +10,13 @@
 import type {
   CompletionOutcome,
   ProviderAdapter,
+  PromptImage,
   RunParams,
   UnifiedModel,
 } from "./types"
 import { makeModelKey, PROVIDER_LABELS } from "./types"
 import { isChatCompatibleId, vendorSlugFromOwner } from "./compat"
-import { postChatCompletion } from "./openai-compat"
+import { buildUserContent, postChatCompletion } from "./openai-compat"
 import { providerErrorFromResponse, providerErrorFromThrown } from "./errors"
 
 export const GROQ_BASE = "https://api.groq.com/openai/v1"
@@ -101,6 +102,7 @@ async function runCompletion(
   apiKey: string,
   model: UnifiedModel,
   prompt: string,
+  images: PromptImage[],
   params: RunParams,
   signal?: AbortSignal,
 ): Promise<CompletionOutcome> {
@@ -108,7 +110,10 @@ async function runCompletion(
   if (params.systemPrompt.trim()) {
     messages.push({ role: "system" as const, content: params.systemPrompt })
   }
-  messages.push({ role: "user" as const, content: prompt })
+  messages.push({
+    role: "user" as const,
+    content: buildUserContent(prompt, images),
+  })
 
   // Keep the payload conservative and portable. Groq accepts the standard
   // temperature/top_p and uses max_completion_tokens.

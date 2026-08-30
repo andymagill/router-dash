@@ -1,6 +1,7 @@
 import type { ORUsage, RunParams } from "@/lib/openrouter"
+import type { PromptImage } from "@/lib/providers/types"
 
-export type RunStatus = "idle" | "running" | "done" | "error"
+export type RunStatus = "idle" | "running" | "done" | "error" | "skipped"
 
 export interface RunState {
   modelId: string
@@ -18,6 +19,7 @@ export interface HistoryEntry {
   id: string
   createdAt: number
   prompt: string
+  images?: PromptImage[]
   params: RunParams
   modelIds: string[]
   results: RunState[]

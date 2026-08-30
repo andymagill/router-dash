@@ -35,6 +35,7 @@ import {
   type UnifiedModel,
   type RunParams,
   type ProviderId,
+  type PromptImage,
   PROVIDER_ORDER,
   ADAPTERS,
   getAdapter,
@@ -43,6 +44,7 @@ import {
   parseModelKey,
   normalizeStoredKey,
   vendorSlugFromId,
+  supportsVision,
 } from "@/lib/providers"
 import { HISTORY_LIMIT, type HistoryEntry, type RunState } from "@/lib/types"
 import type { PromptPreset } from "@/lib/presets"
@@ -118,6 +120,10 @@ export default function Page() {
   const [prompt, setPrompt] = useLocalStorage(
     "routerdash:prompt",
     "Explain the difference between a mutex and a semaphore to a junior developer. Keep it under 120 words and end with a one-line analogy.",
+  )
+  const [images, setImages] = useLocalStorage<PromptImage[]>(
+    "routerdash:images",
+    [],
   )
   const [params, setParams] = useLocalStorage<RunParams>(
     "routerdash:params",
@@ -271,6 +277,7 @@ export default function Page() {
     })
 
     const runKeys = [...selectedKeys]
+    const runImages = [...images]
 
     setResults((prev) => {
       const next = new Map(prev)
@@ -315,10 +322,33 @@ export default function Page() {
           return state
         }
 
+        // Guard: a positively-known text-only model can't take images —
+        // skip it instead of sending a guaranteed-invalid request.
+        if (runImages.length > 0 && !supportsVision(model)) {
+          const state: RunState = {
+            modelId: key,
+            status: "skipped",
+            content: "",
+            error: "This model does not support image input",
+            usage: null,
+            cost: 0,
+            latencyMs: 0,
+          }
+          setResults((prev) => new Map(prev).set(key, state))
+          return state
+        }
+
         try {
           const { content, usage } = await getAdapter(
             model.provider,
-          ).runCompletion(providerKey, model, prompt, params, controller.signal)
+          ).runCompletion(
+            providerKey,
+            model,
+            prompt,
+            runImages,
+            params,
+            controller.signal,
+          )
           const latencyMs = performance.now() - t0
           const state: RunState = {
             modelId: key,
@@ -365,6 +395,9 @@ export default function Page() {
     const failedCount = finalStates.filter(
       (s) => s.status === "error" && s.error !== "Cancelled",
     ).length
+    const skippedCount = finalStates.filter(
+      (s) => s.status === "skipped",
+    ).length
 
     if (doneCount === 0 && failedCount > 0) {
       const firstErr = finalStates.find(
@@ -381,12 +414,13 @@ export default function Page() {
       })
     }
 
-    const produced = doneCount > 0 || failedCount > 0
+    const produced = doneCount > 0 || failedCount > 0 || skippedCount > 0
     if (produced) {
       const entry: HistoryEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         createdAt: Date.now(),
         prompt,
+        images: runImages,
         params,
         modelIds: runKeys,
         results: finalStates,
@@ -406,6 +440,7 @@ export default function Page() {
     connectedCount,
     selectedKeys,
     prompt,
+    images,
     params,
     modelByKey,
     keys,
@@ -423,6 +458,7 @@ export default function Page() {
 
   const applyPreset = (preset: PromptPreset) => {
     setPrompt(preset.prompt)
+    setImages([])
     setParams((p) => ({ ...p, systemPrompt: preset.system }))
     toast.success(`Loaded "${preset.label}" preset`)
   }
@@ -433,6 +469,7 @@ export default function Page() {
       const modelIds = entry.modelIds.map(normalizeStoredKey)
       setSelectedKeys(modelIds)
       setPrompt(entry.prompt)
+      setImages(entry.images ?? [])
       setParams(entry.params)
       setResults(
         new Map(
@@ -449,7 +486,7 @@ export default function Page() {
         window.scrollTo({ top: 0, behavior: "smooth" })
       }
     },
-    [running, handleCancel, setSelectedKeys, setPrompt, setParams],
+    [running, handleCancel, setSelectedKeys, setPrompt, setImages, setParams],
   )
 
   const deleteHistory = React.useCallback(
@@ -535,6 +572,7 @@ export default function Page() {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: Date.now(),
       prompt,
+      images,
       params,
       modelIds: selectedKeys,
       results: runs,
@@ -549,7 +587,7 @@ export default function Page() {
     )
     trackEvent("result_exported", { exportFormat: "json", scope: "current" })
     toast.success("Exported current run as JSON")
-  }, [selectedKeys, results, prompt, params, elapsedMs])
+  }, [selectedKeys, results, prompt, images, params, elapsedMs])
 
   const exportCurrentCsv = React.useCallback(() => {
     if (selectedKeys.length === 0) {
@@ -567,6 +605,7 @@ export default function Page() {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: Date.now(),
       prompt,
+      images,
       params,
       modelIds: selectedKeys,
       results: runs,
@@ -581,7 +620,7 @@ export default function Page() {
     )
     trackEvent("result_exported", { exportFormat: "csv", scope: "current" })
     toast.success("Exported current run as CSV")
-  }, [selectedKeys, results, prompt, params, elapsedMs])
+  }, [selectedKeys, results, prompt, images, params, elapsedMs])
 
   const exportJson = React.useCallback(() => {
     if (history.length === 0) {
@@ -682,6 +721,10 @@ export default function Page() {
     const payload = decoded.payload
     setSelectedKeys(payload.modelIds.map(normalizeStoredKey))
     setPrompt(payload.prompt)
+    // Share links never carry image data (see lib/share.ts) — clear any
+    // locally-attached images so they aren't misread as part of this shared
+    // prompt.
+    setImages([])
     setParams(payload.params)
     const map = new Map<string, RunState>()
     for (const r of payload.results) {
@@ -696,7 +739,7 @@ export default function Page() {
       toast.success("Loaded shared benchmark")
     }
     window.history.replaceState(null, "", window.location.pathname)
-  }, [setSelectedKeys, setPrompt, setParams])
+  }, [setSelectedKeys, setPrompt, setImages, setParams])
 
   return (
     <div className="min-h-svh bg-background">
@@ -788,6 +831,7 @@ export default function Page() {
               <CollapsedModels
                 selectedKeys={selectedKeys}
                 modelByKey={modelByKey}
+                hasImages={images.length > 0}
                 onExpand={() => setPanelCollapsed(false)}
               />
             ) : (
@@ -804,6 +848,8 @@ export default function Page() {
           <PromptPanel
             prompt={prompt}
             onPromptChange={setPrompt}
+            images={images}
+            onImagesChange={setImages}
             onApplyPreset={applyPreset}
             onRun={handleRun}
             onCancel={handleCancel}
@@ -867,10 +913,12 @@ export default function Page() {
 function CollapsedModels({
   selectedKeys,
   modelByKey,
+  hasImages,
   onExpand,
 }: {
   selectedKeys: string[]
   modelByKey: Map<string, UnifiedModel>
+  hasImages: boolean
   onExpand: () => void
 }) {
   if (selectedKeys.length === 0) {
@@ -890,6 +938,7 @@ function CollapsedModels({
         const m = modelByKey.get(key)
         const parsed = parseModelKey(key)
         const slug = m?.vendor ?? parsed.modelId.split("/")[0]
+        const noVision = hasImages && m && !supportsVision(m)
         return (
           <Badge
             key={key}
@@ -904,6 +953,14 @@ function CollapsedModels({
               {m?.name ?? parsed.modelId}
             </span>
             <ProviderTag provider={m?.provider ?? parsed.provider} />
+            {noVision && (
+              <span
+                className="flex items-center gap-1 rounded-full bg-[color:var(--warn)]/15 px-1.5 py-0.5 text-[10px] font-medium text-[color:var(--warn)]"
+                title="This model does not support image input"
+              >
+                No image support
+              </span>
+            )}
           </Badge>
         )
       })}

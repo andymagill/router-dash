@@ -7,10 +7,30 @@
 import type {
   ChatMessage,
   CompletionOutcome,
+  ContentPart,
   ProviderId,
+  PromptImage,
   ORUsage,
 } from "./types"
 import { providerErrorFromResponse, providerErrorFromThrown } from "./errors"
+
+/**
+ * Build a user message's content: a plain string when there are no images (the
+ * original, unchanged shape every provider already accepts), or an
+ * OpenAI-compatible content-parts array when images are attached. All three
+ * adapters here speak this same dialect, so the shape is built once.
+ */
+export function buildUserContent(
+  prompt: string,
+  images: PromptImage[],
+): string | ContentPart[] {
+  if (images.length === 0) return prompt
+  const parts: ContentPart[] = [{ type: "text", text: prompt }]
+  for (const img of images) {
+    parts.push({ type: "image_url", image_url: { url: img.dataUrl } })
+  }
+  return parts
+}
 
 export interface ChatCompletionRequest {
   provider: ProviderId
