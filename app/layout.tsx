@@ -35,7 +35,6 @@ export const metadata: Metadata = {
   },
   description,
   applicationName: 'RouterDash',
-  generator: 'v0.app',
   openGraph: {
     type: 'website',
     url: siteUrl,
