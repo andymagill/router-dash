@@ -904,6 +904,15 @@ export default function Page() {
           >
             Terms
           </Link>
+          <span>·</span>
+          <a
+            href="https://github.com/andymagill/router-dash/issues/new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            Report an Issue
+          </a>
         </div>
       </footer>
     </div>
