@@ -7,7 +7,8 @@ import {
   Loader2Icon,
   SquareIcon,
   FileTextIcon,
-  ChevronDownIcon,
+  SaveIcon,
+  LibraryIcon,
   PaperclipIcon,
   XIcon,
 } from "lucide-react"
@@ -15,15 +16,10 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { PROMPT_PRESETS, type PromptPreset } from "@/lib/presets"
+import { SavePromptDialog } from "@/components/router-dash/save-prompt-dialog"
+import { PromptLibraryDialog } from "@/components/router-dash/prompt-library-dialog"
+import type { PromptPreset } from "@/lib/presets"
+import type { SavedPrompt } from "@/lib/prompt-library"
 import { estimateTokens } from "@/lib/openrouter"
 import { formatNumber } from "@/lib/format"
 import {
@@ -41,7 +37,10 @@ export function PromptPanel({
   onPromptChange,
   images,
   onImagesChange,
-  onApplyPreset,
+  savedPrompts,
+  onLoadPrompt,
+  onSavePrompt,
+  onDeletePrompt,
   onRun,
   onCancel,
   running,
@@ -52,7 +51,10 @@ export function PromptPanel({
   onPromptChange: (value: string) => void
   images: PromptImage[]
   onImagesChange: (images: PromptImage[]) => void
-  onApplyPreset: (preset: PromptPreset) => void
+  savedPrompts: SavedPrompt[]
+  onLoadPrompt: (item: PromptPreset | SavedPrompt) => void
+  onSavePrompt: (input: { label: string; description: string }) => void
+  onDeletePrompt: (id: string) => void
   onRun: () => void
   onCancel: () => void
   running: boolean
@@ -62,6 +64,8 @@ export function PromptPanel({
   const lineCount = prompt ? prompt.split("\n").length : 0
   const tokens = estimateTokens(prompt)
   const [dragOver, setDragOver] = React.useState(false)
+  const [saveOpen, setSaveOpen] = React.useState(false)
+  const [libraryOpen, setLibraryOpen] = React.useState(false)
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -147,33 +151,25 @@ export function PromptPanel({
             <PaperclipIcon data-icon="inline-start" />
             Attach
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  Presets
-                  <ChevronDownIcon data-icon="inline-end" className="opacity-60" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-60">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel>Prompt presets</DropdownMenuLabel>
-                {PROMPT_PRESETS.map((preset) => (
-                  <DropdownMenuItem
-                    key={preset.id}
-                    onClick={() => onApplyPreset(preset)}
-                    className="flex-col items-start gap-0.5"
-                  >
-                    <span className="font-medium">{preset.label}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {preset.description}
-                    </span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setSaveOpen(true)}
+            disabled={!prompt.trim()}
+          >
+            <SaveIcon data-icon="inline-start" />
+            Save
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setLibraryOpen(true)}
+          >
+            <LibraryIcon data-icon="inline-start" />
+            Library
+          </Button>
         </div>
       </div>
 
@@ -266,6 +262,20 @@ export function PromptPanel({
           </Button>
         )}
       </div>
+
+      <SavePromptDialog
+        open={saveOpen}
+        onOpenChange={setSaveOpen}
+        prompt={prompt}
+        onSave={onSavePrompt}
+      />
+      <PromptLibraryDialog
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        savedPrompts={savedPrompts}
+        onLoad={onLoadPrompt}
+        onDelete={onDeletePrompt}
+      />
     </div>
   )
 }
