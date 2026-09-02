@@ -49,6 +49,11 @@ import {
 import { HISTORY_LIMIT, type HistoryEntry, type RunState } from "@/lib/types"
 import type { PromptPreset } from "@/lib/presets"
 import {
+  parseSavedPrompts,
+  createSavedPrompt,
+  type SavedPrompt,
+} from "@/lib/prompt-library"
+import {
   SHARE_PARAM,
   decodeShareToken,
   buildShareUrl,
@@ -139,6 +144,22 @@ export default function Page() {
         toast.error("Browser storage is full — export or clear some history.")
       },
     },
+  )
+  const [storedPrompts, setStoredPrompts] = useLocalStorage<SavedPrompt[]>(
+    "routerdash:savedPrompts",
+    [],
+    {
+      onError: () => {
+        setStorageWarning(true)
+        toast.error(
+          "Browser storage is full — delete a saved prompt or clear some history.",
+        )
+      },
+    },
+  )
+  const savedPrompts = React.useMemo(
+    () => parseSavedPrompts(storedPrompts),
+    [storedPrompts],
   )
   const [activeHistoryId, setActiveHistoryId] = React.useState<string | null>(
     null,
@@ -456,12 +477,51 @@ export default function Page() {
 
   React.useEffect(() => stopTimer, [stopTimer])
 
-  const applyPreset = (preset: PromptPreset) => {
-    setPrompt(preset.prompt)
+  const loadLibraryItem = (item: PromptPreset | SavedPrompt) => {
+    setPrompt(item.prompt)
     setImages([])
-    setParams((p) => ({ ...p, systemPrompt: preset.system }))
-    toast.success(`Loaded "${preset.label}" preset`)
+    setParams((p) => ({
+      ...p,
+      ...("params" in item ? item.params : {}),
+      systemPrompt: item.system,
+    }))
+    toast.success(`Loaded "${item.label}"`)
   }
+
+  const savePrompt = React.useCallback(
+    (input: { label: string; description: string }) => {
+      const entry = createSavedPrompt({
+        label: input.label,
+        description: input.description,
+        prompt,
+        system: params.systemPrompt,
+        params: {
+          temperature: params.temperature,
+          topP: params.topP,
+          maxTokens: params.maxTokens,
+        },
+      })
+      setStoredPrompts((prev) => [entry, ...parseSavedPrompts(prev)])
+      toast.success(`Saved "${entry.label}"`)
+    },
+    [prompt, params, setStoredPrompts],
+  )
+
+  const deletePrompt = React.useCallback(
+    (id: string) => {
+      const removed = savedPrompts.find((p) => p.id === id)
+      if (!removed) return
+      setStoredPrompts((prev) => parseSavedPrompts(prev).filter((p) => p.id !== id))
+      toast.success(`Deleted "${removed.label}"`, {
+        action: {
+          label: "Undo",
+          onClick: () =>
+            setStoredPrompts((prev) => [removed, ...parseSavedPrompts(prev)]),
+        },
+      })
+    },
+    [savedPrompts, setStoredPrompts],
+  )
 
   const loadHistory = React.useCallback(
     (entry: HistoryEntry) => {
@@ -850,7 +910,10 @@ export default function Page() {
             onPromptChange={setPrompt}
             images={images}
             onImagesChange={setImages}
-            onApplyPreset={applyPreset}
+            savedPrompts={savedPrompts}
+            onLoadPrompt={loadLibraryItem}
+            onSavePrompt={savePrompt}
+            onDeletePrompt={deletePrompt}
             onRun={handleRun}
             onCancel={handleCancel}
             running={running}
