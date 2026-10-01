@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { toast } from "sonner"
 import {
   RefreshCwIcon,
@@ -13,6 +12,7 @@ import {
 } from "lucide-react"
 
 import { Header } from "@/components/router-dash/header"
+import { SiteFooter } from "@/components/router-dash/site-footer"
 import { ModelPicker, MAX_MODELS } from "@/components/router-dash/model-picker"
 import { PromptPanel } from "@/components/router-dash/prompt-panel"
 import { ParamsSheet } from "@/components/router-dash/params-sheet"
@@ -950,34 +950,7 @@ export default function Page() {
         </div>
       </main>
 
-      <footer className="mt-4 border-t border-border/50 py-4 text-center">
-        <div className="flex flex-wrap items-center justify-center gap-1 text-xs text-muted-foreground">
-          <a
-            href="https://magill.dev"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-foreground"
-          >
-            Built by Andrew Magill
-          </a>
-          <span>·</span>
-          <Link
-            href="/terms"
-            className="transition-colors hover:text-foreground"
-          >
-            Terms
-          </Link>
-          <span>·</span>
-          <a
-            href="https://github.com/andymagill/router-dash/issues/new"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-foreground"
-          >
-            Report an Issue
-          </a>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

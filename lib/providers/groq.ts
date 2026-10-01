@@ -61,10 +61,11 @@ export function normalizeGroqModel(model: GroqModel): UnifiedModel {
   }
 }
 
-async function fetchCatalog(
+/** Raw `/models` listing, unfiltered. Shared with the speech-to-text catalog. */
+export async function fetchGroqModels(
   apiKey: string,
   signal?: AbortSignal,
-): Promise<UnifiedModel[]> {
+): Promise<GroqModel[]> {
   if (!apiKey.trim()) {
     throw providerErrorFromResponse({
       provider: "groq",
@@ -94,7 +95,14 @@ async function fetchCatalog(
     })
   }
   const json = await res.json()
-  const data: GroqModel[] = json?.data ?? []
+  return json?.data ?? []
+}
+
+async function fetchCatalog(
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<UnifiedModel[]> {
+  const data = await fetchGroqModels(apiKey, signal)
   return data.filter(isCompatible).map(normalizeGroqModel)
 }
 

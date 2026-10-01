@@ -27,7 +27,7 @@ import {
   formatContext,
 } from "@/lib/format"
 
-function StatusPill({ status }: { status: RunStatus }) {
+export function StatusPill({ status }: { status: RunStatus }) {
   const map: Record<
     RunStatus,
     { label: string; className: string; icon: React.ElementType; spin?: boolean }
@@ -74,7 +74,7 @@ function StatusPill({ status }: { status: RunStatus }) {
   )
 }
 
-function FooterMetric({
+export function FooterMetric({
   label,
   value,
 }: {
