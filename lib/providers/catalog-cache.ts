@@ -20,8 +20,15 @@ interface CacheEntry {
   models: UnifiedModel[]
 }
 
-function cacheKey(provider: ProviderId): string {
-  return `routerdash:catalog:${provider}`
+/**
+ * `scope` namespaces a second catalog for the same provider (e.g. Groq's
+ * speech-to-text models, which the chat catalog filters out) so the two never
+ * overwrite each other. Omitted, the key is the original chat-catalog key.
+ */
+function cacheKey(provider: ProviderId, scope?: string): string {
+  return scope
+    ? `routerdash:catalog:${scope}:${provider}`
+    : `routerdash:catalog:${provider}`
 }
 
 /** Storage abstraction so the cache is unit-testable without a real browser. */
@@ -51,12 +58,17 @@ export function isEntryFresh(
 /** Read cached models if present and still fresh; otherwise null. */
 export function readCatalogCache(
   provider: ProviderId,
-  opts: { now?: number; ttl?: number; storage?: CacheStorage | null } = {},
+  opts: {
+    now?: number
+    ttl?: number
+    storage?: CacheStorage | null
+    scope?: string
+  } = {},
 ): UnifiedModel[] | null {
   const storage = opts.storage ?? defaultStorage()
   if (!storage) return null
   const now = opts.now ?? Date.now()
-  const raw = storage.getItem(cacheKey(provider))
+  const raw = storage.getItem(cacheKey(provider, opts.scope))
   if (!raw) return null
   let parsed: CacheEntry
   try {
@@ -78,7 +90,7 @@ export function readCatalogCache(
 export function writeCatalogCache(
   provider: ProviderId,
   models: UnifiedModel[],
-  opts: { now?: number; storage?: CacheStorage | null } = {},
+  opts: { now?: number; storage?: CacheStorage | null; scope?: string } = {},
 ): void {
   const storage = opts.storage ?? defaultStorage()
   if (!storage) return
@@ -88,7 +100,7 @@ export function writeCatalogCache(
     models,
   }
   try {
-    storage.setItem(cacheKey(provider), JSON.stringify(entry))
+    storage.setItem(cacheKey(provider, opts.scope), JSON.stringify(entry))
   } catch {
     // Storage full / unavailable — cache is best-effort only.
   }
@@ -96,12 +108,12 @@ export function writeCatalogCache(
 
 export function clearCatalogCache(
   provider: ProviderId,
-  opts: { storage?: CacheStorage | null } = {},
+  opts: { storage?: CacheStorage | null; scope?: string } = {},
 ): void {
   const storage = opts.storage ?? defaultStorage()
   if (!storage) return
   try {
-    storage.removeItem(cacheKey(provider))
+    storage.removeItem(cacheKey(provider, opts.scope))
   } catch {
     // ignore
   }

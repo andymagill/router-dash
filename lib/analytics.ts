@@ -12,6 +12,9 @@ export type AnalyticsEvent =
   | "share_link_copied"
   | "result_exported"
   | "feedback_opened"
+  | "transcription_started"
+  | "transcription_completed"
+  | "transcription_failed"
 
 /** Allowlisted property keys. Anything else is dropped before sending. */
 const ALLOWED_PROPS = new Set([

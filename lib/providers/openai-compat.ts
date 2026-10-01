@@ -109,7 +109,7 @@ export async function postChatCompletion(
   return { content, usage: parseUsage(j.usage) }
 }
 
-function extractErrorMessage(json: unknown): string | null {
+export function extractErrorMessage(json: unknown): string | null {
   if (!json || typeof json !== "object") return null
   const j = json as Record<string, unknown>
   const error = j.error

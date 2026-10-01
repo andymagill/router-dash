@@ -44,9 +44,11 @@ export interface ORUsage {
 
 /** OpenAI-compatible content-part shapes for multimodal user messages. */
 export interface ContentPart {
-  type: "text" | "image_url"
+  type: "text" | "image_url" | "input_audio"
   text?: string
   image_url?: { url: string }
+  /** Raw base64 audio (not a data URL) plus its container format. */
+  input_audio?: { data: string; format: string }
 }
 
 export interface ChatMessage {
